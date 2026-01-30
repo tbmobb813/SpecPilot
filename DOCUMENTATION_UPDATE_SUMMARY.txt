@@ -1,0 +1,255 @@
+════════════════════════════════════════════════════════════════════════════════
+  SPECPILOT DOCUMENTATION UPDATE - Intelligence Layer Integration
+════════════════════════════════════════════════════════════════════════════════
+
+📚 NEW DOCUMENTS CREATED (3 files)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. INTELLIGENCE_LAYER.md (1200 lines)
+   ├─ Complete game compatibility system design
+   ├─ Hybrid tier + score architecture
+   ├─ Rules engine implementation guide
+   ├─ Database schemas (SQLite)
+   ├─ Verdict logic and bottleneck detection
+   ├─ Composable narrative system
+   ├─ Phase-by-phase implementation roadmap
+   └─ Testing strategy
+
+2. DATA_SOURCES.md (600 lines)
+   ├─ Complete reference of all external data sources
+   ├─ Scraping strategies and rate limits
+   ├─ TechPowerUp GPU database (2000+ GPUs)
+   ├─ CPU benchmark sources (1000+ CPUs)
+   ├─ ProtonDB integration (100k+ game reports)
+   ├─ Steam Deck compatibility sync
+   ├─ PCGamingWiki game requirements
+   ├─ Ethics, legal compliance, and attribution
+   └─ Automated sync schedules
+
+3. NEXT_STEPS.md (500 lines)
+   ├─ Week-by-week action plan
+   ├─ Priority-ordered tasks
+   ├─ Code examples for each feature
+   ├─ Testing guides
+   ├─ Success metrics and milestones
+   ├─ Daily workflow recommendations
+   ├─ Troubleshooting guide
+   └─ Quick command reference
+
+📝 EXISTING DOCUMENTS UPDATED (3 files)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. REVIEW.md
+   └─ Added Intelligence Layer summary section
+   └─ Linked to INTELLIGENCE_LAYER.md for full design
+   └─ Updated long-term vision with Linux/Steam Deck focus
+
+2. README.md
+   └─ Replaced "Future Enhancements" with detailed "Roadmap"
+   └─ Added 4-phase implementation plan
+   └─ Linked to INTELLIGENCE_LAYER.md
+   └─ Added market focus section (Linux Gaming & Steam Deck)
+
+3. BUILD_SUMMARY.md
+   └─ Updated "Next Actions" with intelligence layer tasks
+   └─ Added data sources reference
+   └─ Expanded documentation index
+   └─ Updated phase priorities
+
+🎯 KEY DESIGN DECISIONS DOCUMENTED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Architecture:
+  ✅ Hybrid tier + score system (not pure tiers)
+  ✅ Rules-based verdicts (not ML initially)
+  ✅ Conservative verdicts (underpromise to build trust)
+  ✅ Composable narrative blocks (not rigid templates)
+
+Data Strategy:
+  ✅ Bootstrap from existing datasets (ProtonDB, TechPowerUp)
+  ✅ Start with top 100 games, scale gradually
+  ✅ Community-driven data (not just publisher specs)
+  ✅ Opt-in telemetry for validation
+
+Market Focus:
+  ✅ Linux/Steam Deck first (underserved market)
+  ✅ ProtonDB integration (unique competitive advantage)
+  ✅ Privacy-first (no tracking, all local)
+  ✅ Target: 3M+ Steam Deck users + Linux gamers
+
+Implementation:
+  ✅ Ship fast, iterate based on real data
+  ✅ Manual seed → automated scraping → community contributions
+  ✅ Week 1-2: Bootstrap databases
+  ✅ Week 3-4: MVP rules engine
+  ✅ Week 5-6: Data integration
+  ✅ Week 7+: Scale and validate
+
+🚀 WHAT TO DO NEXT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IMMEDIATE (Do Now):
+  1. Read NEXT_STEPS.md (start here!)
+  2. Test current build: npm run tauri dev
+  3. Verify hardware detection works
+
+WEEK 1-2 (Core Fixes):
+  1. Fix AMD GPU VRAM detection (Linux)
+  2. Add unit tests for tier classification
+  3. Implement OpenGL detection
+
+WEEK 3-4 (Intelligence Layer Bootstrap):
+  1. Create database schema (SQLite)
+  2. Scrape TechPowerUp GPU database
+  3. Scrape CPU benchmark scores
+  4. Build MVP rules engine
+  5. Manually add top 100 games
+
+WEEK 5-6 (Data Integration):
+  1. Integrate ProtonDB API
+  2. Sync Steam Deck compatibility
+  3. Scrape PCGamingWiki
+  4. Launch telemetry collection
+
+WEEK 7+ (Scale):
+  1. Expand to 1000+ games
+  2. Validate tiers with telemetry
+  3. Add community contribution system
+  4. Soft launch on r/linux_gaming
+
+📊 DOCUMENTATION STATS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total Files:            7 files
+New:                    3 files (2,300 lines)
+Updated:                3 files (+400 lines)
+Unchanged:              1 file (QUICKSTART.md)
+
+Total Documentation:    ~4,000 lines
+Code:                   1,346 lines (Rust + TypeScript)
+Total Project:          ~5,500 lines
+
+📁 FILE STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SpecPilot/
+├── 📘 Core Documentation
+│   ├── README.md                      [UPDATED] Project overview + roadmap
+│   ├── QUICKSTART.md                  [unchanged] 5-minute setup guide
+│   ├── REVIEW.md                      [UPDATED] Architecture review
+│   └── BUILD_SUMMARY.md               [UPDATED] Build summary
+│
+├── 🎮 Intelligence Layer Docs (NEW)
+│   ├── INTELLIGENCE_LAYER.md          [NEW] Complete design (1200 lines)
+│   ├── DATA_SOURCES.md                [NEW] Data sources reference (600 lines)
+│   └── NEXT_STEPS.md                  [NEW] Action plan (500 lines)
+│
+├── 📊 Reference
+│   ├── PROJECT_TREE.txt               [unchanged] Visual structure
+│   └── DOCUMENTATION_UPDATE_SUMMARY.txt [This file]
+│
+└── 💻 Source Code (unchanged)
+    ├── src-tauri/                     Rust backend
+    ├── src/                           React frontend
+    └── tests/                         Test structure (empty)
+
+🔗 DOCUMENT RELATIONSHIPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Start Here:
+  QUICKSTART.md
+    └─> README.md
+          └─> REVIEW.md (current architecture)
+                └─> INTELLIGENCE_LAYER.md (future features)
+                      └─> DATA_SOURCES.md (data reference)
+                            └─> NEXT_STEPS.md (action plan)
+
+Quick Reference:
+  PROJECT_TREE.txt    - File structure
+  BUILD_SUMMARY.md    - What was built
+  DATA_SOURCES.md     - Where data comes from
+
+✨ HIGHLIGHTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Complete Intelligence Layer Design
+   → Tier + Score hybrid system
+   → Rules engine architecture
+   → Database schemas ready to implement
+   → Full implementation roadmap
+
+2. Comprehensive Data Strategy
+   → All sources documented (TechPowerUp, ProtonDB, etc.)
+   → Scraping strategies with rate limits
+   → Legal compliance and attribution
+   → Automated sync schedules
+
+3. Actionable Week-by-Week Plan
+   → Clear priorities for 12 weeks
+   → Code examples for each feature
+   → Success metrics defined
+   → Milestones with target dates
+
+4. Market Strategy Defined
+   → Linux/Steam Deck focus
+   → ProtonDB integration (competitive advantage)
+   → Privacy-first approach
+   → Goal: #1 game checker for Linux
+
+🎯 SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MVP (3 Months):
+  ✓ 100+ games with verified requirements
+  ✓ 1,000+ user telemetry reports
+  ✓ 95%+ verdict accuracy
+  ✓ <500ms scan time
+  ✓ Steam Deck integration working
+
+Scale (6 Months):
+  ✓ 1,000+ games covered
+  ✓ 10,000+ user reports
+  ✓ #1 for "Steam Deck game checker"
+  ✓ 50%+ telemetry opt-in rate
+  ✓ Community contribution system
+
+Market Leader (12 Months):
+  ✓ 5,000+ games covered
+  ✓ 100,000+ user reports
+  ✓ ProtonDB partnership
+  ✓ Featured on r/SteamDeck, r/linux_gaming
+  ✓ Better Linux coverage than "Can You Run It"
+
+📖 RECOMMENDED READING ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Day 1:
+  1. NEXT_STEPS.md (start here - tells you what to do)
+  2. QUICKSTART.md (if build fails)
+
+Day 2:
+  3. INTELLIGENCE_LAYER.md (skim - 30 mins)
+  4. DATA_SOURCES.md (reference - 15 mins)
+
+When Building:
+  5. INTELLIGENCE_LAYER.md (deep read - sections as needed)
+  6. DATA_SOURCES.md (reference specific sources)
+  7. NEXT_STEPS.md (daily task list)
+
+For Context:
+  8. REVIEW.md (understand current architecture)
+  9. README.md (project overview)
+  10. BUILD_SUMMARY.md (what was built and why)
+
+════════════════════════════════════════════════════════════════════════════════
+
+🚀 YOU'RE READY TO BUILD!
+
+Start with: NEXT_STEPS.md → Week 1 tasks
+
+All documentation is cross-linked and ready to guide you through the entire
+implementation from MVP to market leader.
+
+Good luck! 🎮
+
+════════════════════════════════════════════════════════════════════════════════
