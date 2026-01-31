@@ -39,6 +39,18 @@ jobs:
             librsvg2-dev \
             patchelf
 
+      - name: Debug pkg-config/setup
+        run: |
+          echo "pkg-config: $(pkg-config --version || echo 'not found')"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          echo "Searching common pkgconfig dirs for glib/gobject pc files"
+          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig || true
+          ls -la /usr/lib/pkgconfig || true
+          ls -la /usr/share/pkgconfig || true
+          echo "Try pkg-config queries (non-fatal)"
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs glib-2.0 || true
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs gobject-2.0 || true
+
       - name: Install Node dependencies
         run: npm ci
 
