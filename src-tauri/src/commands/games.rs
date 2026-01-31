@@ -385,17 +385,34 @@ fn generate_tier_fallback_verdict(hardware: &HardwareProfile) -> VerdictResult {
 }
 
 fn find_db_path() -> Option<String> {
-    let candidates = [
-        "intelligence.db",
-        "../intelligence.db",
-        "src-tauri/intelligence.db",
-    ];
+    use std::path::PathBuf;
 
-    for path in candidates {
-        if std::path::Path::new(path).exists() {
-            return Some(path.to_string());
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // Check directory of the running executable (handles packaged app layouts)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            candidates.push(parent.join("intelligence.db"));
+            candidates.push(parent.join("resources").join("intelligence.db"));
+            // Some packaging places resources alongside or in a parent share directory
+            candidates.push(parent.join("..").join("share").join("specpilot").join("intelligence.db"));
         }
     }
+
+    // Fallbacks for development layouts
+    candidates.push(PathBuf::from("intelligence.db"));
+    candidates.push(PathBuf::from("../intelligence.db"));
+    candidates.push(PathBuf::from("src-tauri/intelligence.db"));
+    candidates.push(PathBuf::from("data/intelligence.db"));
+
+    for p in candidates {
+        if p.exists() {
+            if let Some(s) = p.to_str() {
+                return Some(s.to_string());
+            }
+        }
+    }
+
     None
 }
 
