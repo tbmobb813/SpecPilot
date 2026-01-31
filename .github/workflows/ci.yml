@@ -34,7 +34,9 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Build Rust
-        run: cargo build --manifest-path src-tauri/Cargo.toml --verbose
+        working-directory: src-tauri
+        run: cargo build --verbose
 
       - name: Run Rust tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --verbose
+        working-directory: src-tauri
+        run: cargo test --verbose
