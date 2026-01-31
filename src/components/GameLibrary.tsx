@@ -73,20 +73,28 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       });
 
       // Check compatibility for each game if hardware is available
+      // Process in batches to avoid overwhelming the backend
       if (hardwareProfile) {
-        const gamesWithVerdicts = await Promise.all(
-          results.map(async (game) => {
-            try {
-              const verdict: VerdictResult = await invoke('check_game_compatibility', {
-                steamId: game.steam_id,
-                hardware: hardwareProfile,
-              });
-              return { ...game, verdict };
-            } catch {
-              return game;
-            }
-          })
-        );
+        const BATCH_SIZE = 20;
+        const gamesWithVerdicts: GameResult[] = [];
+
+        for (let i = 0; i < results.length; i += BATCH_SIZE) {
+          const batch = results.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.all(
+            batch.map(async (game) => {
+              try {
+                const verdict: VerdictResult = await invoke('check_game_compatibility', {
+                  steamId: game.steam_id,
+                  hardware: hardwareProfile,
+                });
+                return { ...game, verdict };
+              } catch {
+                return game;
+              }
+            })
+          );
+          gamesWithVerdicts.push(...batchResults);
+        }
         setGames(gamesWithVerdicts);
       } else {
         setGames(results);

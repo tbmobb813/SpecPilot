@@ -1,6 +1,37 @@
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePool;
+use std::sync::OnceLock;
+use tokio::sync::Mutex;
 use crate::hardware::HardwareProfile;
+
+// Shared database pool - initialized once, reused for all queries
+static DB_POOL: OnceLock<Mutex<Option<SqlitePool>>> = OnceLock::new();
+
+async fn get_db_pool() -> Result<SqlitePool, String> {
+    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
+    let mut guard = mutex.lock().await;
+
+    if let Some(pool) = guard.as_ref() {
+        return Ok(pool.clone());
+    }
+
+    let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
+    let db_url = format!("sqlite:{}", db_path);
+
+    let pool = SqlitePool::connect(&db_url)
+        .await
+        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+
+    *guard = Some(pool.clone());
+    Ok(pool)
+}
+
+#[cfg(test)]
+async fn reset_db_pool() {
+    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
+    let mut guard = mutex.lock().await;
+    *guard = None;
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameResult {
@@ -66,12 +97,7 @@ struct GameRequirementsRow {
 
 #[tauri::command]
 pub async fn search_games(query: String) -> Result<Vec<GameResult>, String> {
-    let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
-    let db_url = format!("sqlite:{}", db_path);
-
-    let pool = SqlitePool::connect(&db_url)
-        .await
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+    let pool = get_db_pool().await?;
 
     let search_pattern = format!("%{}%", query.to_lowercase());
 
@@ -113,12 +139,7 @@ pub async fn browse_games(
     limit: Option<i32>,
     offset: Option<i32>,
 ) -> Result<Vec<GameResult>, String> {
-    let db_path = find_db_path().ok_or("Database not found")?;
-    let db_url = format!("sqlite:{}", db_path);
-
-    let pool = SqlitePool::connect(&db_url)
-        .await
-        .map_err(|e| format!("Failed to connect: {}", e))?;
+    let pool = get_db_pool().await?;
 
     let limit_val = limit.unwrap_or(50);
     let offset_val = offset.unwrap_or(0);
@@ -164,12 +185,7 @@ pub async fn check_game_compatibility(
     steam_id: i64,
     hardware: HardwareProfile,
 ) -> Result<VerdictResult, String> {
-    let db_path = find_db_path().ok_or("Database not found")?;
-    let db_url = format!("sqlite:{}", db_path);
-
-    let pool = SqlitePool::connect(&db_url)
-        .await
-        .map_err(|e| format!("Failed to connect: {}", e))?;
+    let pool = get_db_pool().await?;
 
     // Fetch game requirements
     let game: Option<GameRequirementsRow> = sqlx::query_as(
@@ -213,11 +229,11 @@ pub async fn check_game_compatibility(
         storage_gb: game.rec_storage_gb,
     };
 
-    // User hardware values
-    let user_ram_mb = hardware.memory.total as i32;  // Already in MB
-    let user_vram_mb = hardware.gpu.vram as i32;     // Already in MB
-    let user_cpu_cores = hardware.cpu.cores as i32;
-    let user_storage_gb = hardware.storage.available as i32;  // Available space
+    // User hardware values (use i64 to avoid any overflow risk on extreme systems)
+    let user_ram_mb = hardware.memory.total as i64;
+    let user_vram_mb = hardware.gpu.vram as i64;
+    let user_cpu_cores = hardware.cpu.cores as i64;
+    let user_storage_gb = hardware.storage.available as i64;
 
     let mut details = Vec::new();
     let mut meets_min = true;
@@ -226,9 +242,11 @@ pub async fn check_game_compatibility(
 
     // RAM check
     if let Some(min_ram) = game.min_ram_mb {
+        let min_ram = min_ram as i64;
         checks_performed += 1;
         if user_ram_mb >= min_ram {
             if let Some(rec_ram) = game.rec_ram_mb {
+                let rec_ram = rec_ram as i64;
                 if user_ram_mb >= rec_ram {
                     details.push(format!("✅ RAM: {} GB (recommended: {} GB)", user_ram_mb / 1024, rec_ram / 1024));
                 } else {
@@ -247,9 +265,11 @@ pub async fn check_game_compatibility(
 
     // VRAM check
     if let Some(min_vram) = game.min_gpu_vram_mb {
+        let min_vram = min_vram as i64;
         checks_performed += 1;
         if user_vram_mb >= min_vram {
             if let Some(rec_vram) = game.rec_gpu_vram_mb {
+                let rec_vram = rec_vram as i64;
                 if user_vram_mb >= rec_vram {
                     details.push(format!("✅ VRAM: {} GB (recommended: {} GB)", user_vram_mb / 1024, rec_vram / 1024));
                 } else {
@@ -268,9 +288,11 @@ pub async fn check_game_compatibility(
 
     // CPU cores check
     if let Some(min_cores) = game.min_cpu_cores {
+        let min_cores = min_cores as i64;
         checks_performed += 1;
         if user_cpu_cores >= min_cores {
             if let Some(rec_cores) = game.rec_cpu_cores {
+                let rec_cores = rec_cores as i64;
                 if user_cpu_cores >= rec_cores {
                     details.push(format!("✅ CPU: {} cores (recommended: {} cores)", user_cpu_cores, rec_cores));
                 } else {
@@ -289,6 +311,7 @@ pub async fn check_game_compatibility(
 
     // Storage check
     if let Some(min_storage) = game.min_storage_gb {
+        let min_storage = min_storage as i64;
         checks_performed += 1;
         if user_storage_gb >= min_storage {
             details.push(format!("✅ Storage: {} GB available (need {} GB)", user_storage_gb, min_storage));
@@ -324,19 +347,19 @@ pub async fn check_game_compatibility(
             let mut exceeds = false;
 
             if let Some(rec_ram) = game.rec_ram_mb {
-                if user_ram_mb > rec_ram * 2 {
+                if user_ram_mb > (rec_ram as i64) * 2 {
                     exceeds = true;
                 }
             }
 
             if let Some(rec_vram) = game.rec_gpu_vram_mb {
-                if user_vram_mb > rec_vram * 2 {
+                if user_vram_mb > (rec_vram as i64) * 2 {
                     exceeds = true;
                 }
             }
 
             if let Some(rec_cores) = game.rec_cpu_cores {
-                if user_cpu_cores > rec_cores * 2 {
+                if user_cpu_cores > (rec_cores as i64) * 2 {
                     exceeds = true;
                 }
             }
@@ -409,15 +432,31 @@ fn find_db_path() -> Option<String> {
 
     // Check directory of the running executable (handles packaged app layouts)
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("intelligence.db"));
-            candidates.push(parent.join("resources").join("intelligence.db"));
-            // Some packaging places resources alongside or in a parent share directory
-            candidates.push(parent.join("..").join("share").join("specpilot").join("intelligence.db"));
+        if let Some(exe_dir) = exe.parent() {
+            // Windows/Linux: database next to executable
+            candidates.push(exe_dir.join("intelligence.db"));
+
+            // Windows/Linux: in resources subfolder
+            candidates.push(exe_dir.join("resources").join("intelligence.db"));
+
+            // Linux AppImage/package: in share directory
+            candidates.push(exe_dir.join("..").join("share").join("specpilot").join("intelligence.db"));
+
+            // macOS: executable is in Contents/MacOS/, resources in Contents/Resources/
+            #[cfg(target_os = "macos")]
+            {
+                candidates.push(exe_dir.join("..").join("Resources").join("intelligence.db"));
+            }
+
+            // Tauri bundles resources relative to the app
+            if let Some(grandparent) = exe_dir.parent() {
+                candidates.push(grandparent.join("resources").join("intelligence.db"));
+                candidates.push(grandparent.join("Resources").join("intelligence.db"));
+            }
         }
     }
 
-    // Fallbacks for development layouts
+    // Fallbacks for development layouts (when running via `cargo run` or `npm run tauri dev`)
     candidates.push(PathBuf::from("intelligence.db"));
     candidates.push(PathBuf::from("../intelligence.db"));
     candidates.push(PathBuf::from("src-tauri/intelligence.db"));
@@ -454,27 +493,38 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_rec_does_not_exceed() {
+        // Reset the global pool so we use a fresh connection
+        reset_db_pool().await;
+
         // Setup temp dir and DB
         let td = tempdir().unwrap();
         let db_path = td.path().join("intelligence.db");
         let db_str = db_path.to_str().unwrap().to_string();
 
-        let db_url = format!("sqlite:{}", db_str);
+        // Use ?mode=rwc to create the database file
+        let db_url = format!("sqlite:{}?mode=rwc", db_str);
         let pool = SqlitePool::connect(&db_url).await.unwrap();
 
-        // Create minimal schema and insert a game with only minimum requirements
+        // Create schema with all columns that check_game_compatibility expects
         sqlx::query(
             r#"CREATE TABLE games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 steam_id INTEGER,
                 name TEXT,
                 min_cpu_cores INTEGER,
+                min_cpu_clock_ghz REAL,
+                min_cpu_text TEXT,
                 min_ram_mb INTEGER,
                 min_gpu_vram_mb INTEGER,
+                min_gpu_text TEXT,
                 min_storage_gb INTEGER,
                 rec_cpu_cores INTEGER,
+                rec_cpu_clock_ghz REAL,
+                rec_cpu_text TEXT,
                 rec_ram_mb INTEGER,
                 rec_gpu_vram_mb INTEGER,
+                rec_gpu_text TEXT,
+                rec_storage_gb INTEGER,
                 requirements_parsed INTEGER
             )"#,
         )
@@ -522,25 +572,37 @@ mod tests {
 
     #[tokio::test]
     async fn test_with_rec_exceeds() {
+        // Reset the global pool so we use a fresh connection
+        reset_db_pool().await;
+
         let td = tempdir().unwrap();
         let db_path = td.path().join("intelligence.db");
         let db_str = db_path.to_str().unwrap().to_string();
 
-        let db_url = format!("sqlite:{}", db_str);
+        // Use ?mode=rwc to create the database file
+        let db_url = format!("sqlite:{}?mode=rwc", db_str);
         let pool = SqlitePool::connect(&db_url).await.unwrap();
 
+        // Create schema with all columns that check_game_compatibility expects
         sqlx::query(
             r#"CREATE TABLE games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 steam_id INTEGER,
                 name TEXT,
                 min_cpu_cores INTEGER,
+                min_cpu_clock_ghz REAL,
+                min_cpu_text TEXT,
                 min_ram_mb INTEGER,
                 min_gpu_vram_mb INTEGER,
+                min_gpu_text TEXT,
                 min_storage_gb INTEGER,
                 rec_cpu_cores INTEGER,
+                rec_cpu_clock_ghz REAL,
+                rec_cpu_text TEXT,
                 rec_ram_mb INTEGER,
                 rec_gpu_vram_mb INTEGER,
+                rec_gpu_text TEXT,
+                rec_storage_gb INTEGER,
                 requirements_parsed INTEGER
             )"#,
         )
