@@ -1,5 +1,5 @@
 mod common;
-mod platform;
+pub mod platform;
 
 pub use common::*;
 
@@ -29,7 +29,12 @@ pub fn scan_system() -> Result<HardwareProfile> {
         #[cfg(target_os = "windows")]
         vulkan: None, // Could detect on Windows too
 
-        opengl: None, // Could add detection
+        #[cfg(target_os = "linux")]
+        opengl: platform_impl::detect_opengl()?,
+
+        #[cfg(target_os = "windows")]
+        opengl: None, // Windows OpenGL detection not implemented yet
+
         metal: None,  // macOS only
     };
 

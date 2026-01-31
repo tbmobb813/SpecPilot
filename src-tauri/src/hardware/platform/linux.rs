@@ -222,6 +222,25 @@ pub fn detect_vulkan() -> Result<Option<VulkanSupport>> {
     }))
 }
 
+pub fn detect_opengl() -> Result<Option<OpenGLSupport>> {
+    // Check if glxinfo is available
+    let output = Command::new("glxinfo").arg("-B").output();
+    if output.is_err() {
+        return Ok(None);
+    }
+    let output = output.unwrap();
+    let info = String::from_utf8_lossy(&output.stdout);
+
+    let version = info
+        .lines()
+        .find(|line| line.to_lowercase().contains("opengl version"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "Unknown".into());
+
+    Ok(Some(OpenGLSupport { version }))
+}
+
 // Helper functions
 
 fn get_cpu_frequency() -> Result<f32> {
@@ -281,14 +300,206 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
             }
         }
         GpuVendor::AMD => {
-            // Try rocm-smi or parse from sysfs
-            // /sys/class/drm/card*/device/mem_info_vram_total
+            // Try to read VRAM from sysfs entries created by amdgpu
+            // Example path: /sys/class/drm/card0/device/mem_info_vram_total
+            if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/mem_info_vram_total") {
+                for entry in entries.filter_map(|r| r.ok()) {
+                    if let Ok(vram_str) = std::fs::read_to_string(&entry) {
+                        if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
+                            return Ok(vram_bytes / (1024 * 1024)); // Bytes -> MB
+                        }
+                    }
+                }
+            }
+            // Fallback to trying rocm-smi
+            let output = Command::new("rocm-smi").arg("--showmeminfo").output();
+            if let Ok(output) = output {
+                let s = String::from_utf8_lossy(&output.stdout);
+                // Try to parse a number in MB from output
+                        if let Some(num) = parse_rocm_smi_output(&s) {
+                            return Ok(num);
+                        }
+            }
         }
         _ => {}
     }
 
     // Fallback: Try to estimate from lspci or glxinfo
     Ok(0) // Unknown - will need to look up in database by model
+}
+
+// Parse `rocm-smi --showmeminfo` (or similar) output for a VRAM value in MB.
+fn parse_rocm_smi_output(s: &str) -> Option<u64> {
+    for line in s.lines() {
+        let lower = line.to_lowercase();
+        if lower.contains("vram") || lower.contains("memory") || lower.contains("mem") {
+            // Try to find a token containing a number with optional 'MB'
+            for tok in line.split_whitespace() {
+                let t = tok.trim().trim_end_matches(',');
+                if let Some(n) = t.strip_suffix("MB") {
+                    if let Ok(val) = n.parse::<u64>() {
+                        return Some(val);
+                    }
+                } else if let Ok(val) = t.parse::<u64>() {
+                    // If token is a plain number, assume it's MB
+                    return Some(val);
+                }
+            }
+        }
+    }
+    None
+}
+
+// Parse `nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits` output
+fn parse_nvidia_smi_output(s: &str) -> Option<u64> {
+    // The CSV noheader output is typically a number per line (MB)
+    for line in s.lines() {
+        let t = line.trim();
+        if let Ok(val) = t.parse::<u64>() {
+            return Some(val);
+        }
+    }
+    None
+}
+
+// Default runner that executes commands on the host
+#[cfg(test)]
+fn default_runner(cmd: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(cmd).args(args).output().ok()?;
+    Some(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+// Generic detect_vram which accepts an injectable runner for testing.
+#[cfg(test)]
+pub fn detect_vram_with_runner<F>(vendor: &GpuVendor, runner: F) -> Result<u64>
+where
+    F: Fn(&str, &[&str]) -> Option<String>,
+{
+    match vendor {
+        GpuVendor::Nvidia => {
+            // Try nvidia-smi
+            if let Some(out) = runner(
+                "nvidia-smi",
+                &["--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            ) {
+                if let Some(n) = parse_nvidia_smi_output(&out) {
+                    return Ok(n);
+                }
+            }
+        }
+        GpuVendor::AMD => {
+            // Try to read VRAM from sysfs entries created by amdgpu
+            if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/mem_info_vram_total") {
+                for entry in entries.filter_map(|r| r.ok()) {
+                    if let Ok(vram_str) = std::fs::read_to_string(&entry) {
+                        if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
+                            return Ok(vram_bytes / (1024 * 1024)); // Bytes -> MB
+                        }
+                    }
+                }
+            }
+            // Fallback to rocm-smi via runner
+            if let Some(out) = runner("rocm-smi", &["--showmeminfo"]) {
+                if let Some(n) = parse_rocm_smi_output(&out) {
+                    return Ok(n);
+                }
+            }
+        }
+        _ => {}
+    }
+
+    // Fallback: Try to estimate from lspci or glxinfo
+    Ok(0)
+}
+
+// Helper used by tests to exercise parsing logic directly from provided output
+pub fn detect_vram_from_output(vendor: &GpuVendor, output: Option<&str>) -> Result<u64> {
+    match vendor {
+        GpuVendor::Nvidia => {
+            if let Some(s) = output {
+                if let Some(n) = parse_nvidia_smi_output(s) {
+                    return Ok(n);
+                }
+            }
+        }
+        GpuVendor::AMD => {
+            if let Some(s) = output {
+                if let Some(n) = parse_rocm_smi_output(s) {
+                    return Ok(n);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(0)
+}
+
+#[test]
+fn test_classify_amd_integrated() {
+    assert_eq!(classify_gpu_tier("AMD Radeon Vega 8 Graphics"), GpuTier::Integrated);
+}
+
+#[test]
+fn test_classify_intel_i9() {
+    assert_eq!(classify_cpu_tier("Intel Core i9-13900K"), CpuTier::Enthusiast);
+}
+
+#[test]
+fn test_classify_ryzen_5() {
+    assert_eq!(classify_cpu_tier("AMD Ryzen 5 5600X"), CpuTier::Mainstream);
+}
+
+#[test]
+fn test_parse_rocm_smi_output_mb() {
+    let sample = "GPU[0] : VRAM : 8192MB\nSome other line";
+    assert_eq!(parse_rocm_smi_output(sample), Some(8192));
+}
+
+#[test]
+fn test_parse_rocm_smi_output_number_token() {
+    let sample = "Memory usage: 4096 used";
+    assert_eq!(parse_rocm_smi_output(sample), Some(4096));
+}
+
+#[test]
+fn test_detect_vram_unknown_returns_zero() {
+    // Unknown vendor should return Ok(0)
+    let v = detect_vram(&GpuVendor::Unknown).unwrap();
+    assert_eq!(v, 0);
+}
+
+#[test]
+fn test_parse_nvidia_smi_output_csv() {
+    let sample = "8192\n";
+    assert_eq!(parse_nvidia_smi_output(sample), Some(8192));
+}
+
+#[test]
+fn test_detect_vram_from_output_nvidia() {
+    let sample = "8192\n";
+    let v = detect_vram_from_output(&GpuVendor::Nvidia, Some(sample)).unwrap();
+    assert_eq!(v, 8192);
+}
+
+#[test]
+fn test_detect_vram_from_output_amd() {
+    let sample = "VRAM : 4096MB";
+    let v = detect_vram_from_output(&GpuVendor::AMD, Some(sample)).unwrap();
+    assert_eq!(v, 4096);
+}
+
+#[test]
+fn test_detect_vram_with_runner_nvidia() {
+    let runner = |_: &str, _: &[&str]| Some("12345\n".to_string());
+    let v = detect_vram_with_runner(&GpuVendor::Nvidia, runner).unwrap();
+    assert_eq!(v, 12345);
+}
+
+#[test]
+fn test_detect_vram_with_runner_amd() {
+    let runner = |_: &str, _: &[&str]| Some("VRAM : 2048MB".to_string());
+    let v = detect_vram_with_runner(&GpuVendor::AMD, runner).unwrap();
+    assert_eq!(v, 2048);
 }
 
 fn detect_driver_version(vendor: &GpuVendor) -> Result<String> {
@@ -394,7 +605,7 @@ fn detect_linux_distribution() -> Option<String> {
 }
 
 // Tier classification (basic - enhance with database lookups)
-fn classify_cpu_tier(model: &str) -> CpuTier {
+pub fn classify_cpu_tier(model: &str) -> CpuTier {
     let model_lower = model.to_lowercase();
 
     if model_lower.contains("threadripper") || model_lower.contains("xeon") {
@@ -412,7 +623,7 @@ fn classify_cpu_tier(model: &str) -> CpuTier {
     }
 }
 
-fn classify_gpu_tier(model: &str) -> GpuTier {
+pub fn classify_gpu_tier(model: &str) -> GpuTier {
     let model_lower = model.to_lowercase();
 
     // NVIDIA
@@ -429,6 +640,9 @@ fn classify_gpu_tier(model: &str) -> GpuTier {
     } else if model_lower.contains("1650") || model_lower.contains("6500") {
         GpuTier::Budget
     } else if model_lower.contains("intel") && !model_lower.contains("arc") {
+        GpuTier::Integrated
+    } else if model_lower.contains("vega") || model_lower.contains("radeon vega") {
+        // AMD Vega-based APUs are integrated GPUs
         GpuTier::Integrated
     } else {
         GpuTier::Budget // Default fallback

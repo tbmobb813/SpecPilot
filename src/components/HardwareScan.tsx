@@ -1,16 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { scanHardware, getCachedProfile, HardwareProfile, CpuTier, GpuTier } from '../api/hardware';
 
-export function HardwareScan() {
+interface HardwareScanProps {
+  onProfileUpdate?: (profile: HardwareProfile | null) => void;
+}
+
+export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
   const [profile, setProfile] = useState<HardwareProfile | null>(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const updateProfile = (newProfile: HardwareProfile | null) => {
+    setProfile(newProfile);
+    onProfileUpdate?.(newProfile);
+  };
 
   useEffect(() => {
     // Try to load cached profile on mount
     getCachedProfile().then(cached => {
       if (cached) {
-        setProfile(cached);
+        updateProfile(cached);
       }
     }).catch(err => {
       console.error('Failed to load cached profile:', err);
@@ -23,7 +32,7 @@ export function HardwareScan() {
 
     try {
       const result = await scanHardware();
-      setProfile(result);
+      updateProfile(result);
     } catch (e) {
       setError(e as string);
     } finally {
@@ -32,11 +41,8 @@ export function HardwareScan() {
   };
 
   const getTierLabel = (tier: CpuTier | GpuTier): string => {
-    if (typeof tier === 'number') {
-      const labels = ['Unknown', 'Budget', 'Entry', 'Mainstream', 'Performance', 'Enthusiast', 'Workstation/Ultra'];
-      return labels[tier] || 'Unknown';
-    }
-    return tier.toString();
+    const labels = ['Unknown', 'Budget', 'Entry', 'Mainstream', 'Performance', 'Enthusiast', 'Workstation/Ultra'];
+    return labels[tier] || 'Unknown';
   };
 
   const formatStorageType = (type: string): string => {

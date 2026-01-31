@@ -6,10 +6,20 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "intelligence:init": "node scripts/intelligence_init.js",
+    "scrape:gpus": "node scripts/scrapers/techpowerup.js",
+    "scrape:cpus": "node scripts/scrapers/scrape_cpus_v2.js",
+    "import:cpus": "node scripts/import/passmark_cpus_import.js",
+    "import:gpus": "node scripts/import/passmark_gpus_import.js",
+    "scrape:pcgw": "node scripts/scrapers/pcgamingwiki.js",
+    "sync:protondb": "node scripts/sync/protondb.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.5.0",
+    "axios": "^1.13.4",
+    "better-sqlite3": "^12.6.2",
+    "cheerio": "^1.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
@@ -20,8 +30,7 @@
     "@vitejs/plugin-react": "^4.2.0",
     "typescript": "^5.3.0",
     "vite": "^7.3.1"
-  }
-  ,
+  },
   "overrides": {
     "esbuild": "^0.25.0"
   }
