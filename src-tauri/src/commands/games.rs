@@ -437,11 +437,148 @@ fn find_db_path() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
+    use sqlx::sqlite::SqlitePool;
+    use std::env;
+    use crate::hardware::{
+        CpuInfo, GpuInfo, MemoryInfo, StorageInfo, OsInfo, GraphicsApiSupport,
+        CpuTier, GpuTier, GpuVendor, StorageType,
+    };
 
     #[test]
     fn test_unknown_verdict() {
         let verdict = generate_unknown_verdict();
         assert_eq!(verdict.status, "unknown");
         assert_eq!(verdict.confidence, "low");
+    }
+
+    #[tokio::test]
+    async fn test_no_rec_does_not_exceed() {
+        // Setup temp dir and DB
+        let td = tempdir().unwrap();
+        let db_path = td.path().join("intelligence.db");
+        let db_str = db_path.to_str().unwrap().to_string();
+
+        let db_url = format!("sqlite:{}", db_str);
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+
+        // Create minimal schema and insert a game with only minimum requirements
+        sqlx::query(
+            r#"CREATE TABLE games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                steam_id INTEGER,
+                name TEXT,
+                min_cpu_cores INTEGER,
+                min_ram_mb INTEGER,
+                min_gpu_vram_mb INTEGER,
+                min_storage_gb INTEGER,
+                rec_cpu_cores INTEGER,
+                rec_ram_mb INTEGER,
+                rec_gpu_vram_mb INTEGER,
+                requirements_parsed INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a game where recommended fields are NULL
+        sqlx::query(
+            "INSERT INTO games (steam_id, name, min_cpu_cores, min_ram_mb, min_gpu_vram_mb, min_storage_gb, requirements_parsed) VALUES ($1,$2,$3,$4,$5,$6,$7)"
+        )
+        .bind(1i64)
+        .bind("Test Game")
+        .bind(2i32)
+        .bind(4096i32)
+        .bind(1024i32)
+        .bind(10i32)
+        .bind(1i32)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Make the test process current dir the temp dir so find_db_path finds intelligence.db
+        let orig_dir = env::current_dir().unwrap();
+        env::set_current_dir(td.path()).unwrap();
+
+        // Build a hardware profile that has more than minimum but there are no recommended values
+        let hw = HardwareProfile {
+            cpu: CpuInfo { model: "TestCPU".into(), vendor: "TestVendor".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
+            gpu: GpuInfo { model: "TestGPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd },
+            os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
+            graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
+        };
+
+        let verdict = check_game_compatibility(1, hw).await.unwrap();
+
+        // Should not be incorrectly classified as exceeds_recommended when rec fields are missing
+        assert_ne!(verdict.status, "exceeds_recommended");
+
+        // restore cwd
+        env::set_current_dir(orig_dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_with_rec_exceeds() {
+        let td = tempdir().unwrap();
+        let db_path = td.path().join("intelligence.db");
+        let db_str = db_path.to_str().unwrap().to_string();
+
+        let db_url = format!("sqlite:{}", db_str);
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+
+        sqlx::query(
+            r#"CREATE TABLE games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                steam_id INTEGER,
+                name TEXT,
+                min_cpu_cores INTEGER,
+                min_ram_mb INTEGER,
+                min_gpu_vram_mb INTEGER,
+                min_storage_gb INTEGER,
+                rec_cpu_cores INTEGER,
+                rec_ram_mb INTEGER,
+                rec_gpu_vram_mb INTEGER,
+                requirements_parsed INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a game with recommended values
+        sqlx::query(
+            "INSERT INTO games (steam_id, name, min_cpu_cores, min_ram_mb, min_gpu_vram_mb, rec_ram_mb, rec_gpu_vram_mb, requirements_parsed) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)"
+        )
+        .bind(2i64)
+        .bind("GameWithRec")
+        .bind(2i32)
+        .bind(2048i32)
+        .bind(512i32)
+        .bind(2048i32) // rec_ram_mb
+        .bind(512i32)  // rec_vram
+        .bind(1i32)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let orig_dir = env::current_dir().unwrap();
+        env::set_current_dir(td.path()).unwrap();
+
+        let hw = HardwareProfile {
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 8, threads: 8, base_clock: 3.0, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Performance },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Performance },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
+            storage: StorageInfo { total: 1000, available: 500, storage_type: StorageType::NvmeSsd },
+            os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
+            graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
+        };
+
+        let verdict = check_game_compatibility(2, hw).await.unwrap();
+        assert_eq!(verdict.status, "exceeds_recommended");
+
+        env::set_current_dir(orig_dir).unwrap();
     }
 }
