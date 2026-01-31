@@ -319,24 +319,42 @@ pub async fn check_game_compatibility(
             if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
         )
     } else {
-        // Check if we significantly exceed
-        let exceeds = user_ram_mb > game.rec_ram_mb.unwrap_or(0) * 2
-            || user_vram_mb > game.rec_gpu_vram_mb.unwrap_or(0) * 2;
+            // Check if we significantly exceed recommended specs.
+            // Only consider a metric if the corresponding recommended value is present.
+            let mut exceeds = false;
 
-        if exceeds {
-            (
-                "exceeds_recommended".to_string(),
-                format!("Your hardware exceeds recommended specs for {}", game.name),
-                if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
-            )
-        } else {
-            (
-                "meets_recommended".to_string(),
-                format!("Your hardware meets recommended specs for {}", game.name),
-                if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
-            )
-        }
-    };
+            if let Some(rec_ram) = game.rec_ram_mb {
+                if user_ram_mb > rec_ram * 2 {
+                    exceeds = true;
+                }
+            }
+
+            if let Some(rec_vram) = game.rec_gpu_vram_mb {
+                if user_vram_mb > rec_vram * 2 {
+                    exceeds = true;
+                }
+            }
+
+            if let Some(rec_cores) = game.rec_cpu_cores {
+                if user_cpu_cores > rec_cores * 2 {
+                    exceeds = true;
+                }
+            }
+
+            if exceeds {
+                (
+                    "exceeds_recommended".to_string(),
+                    format!("Your hardware exceeds recommended specs for {}", game.name),
+                    if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
+                )
+            } else {
+                (
+                    "meets_recommended".to_string(),
+                    format!("Your hardware meets recommended specs for {}", game.name),
+                    if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
+                )
+            }
+        };
 
     Ok(VerdictResult {
         status,
