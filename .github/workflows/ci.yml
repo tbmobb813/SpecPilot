@@ -58,6 +58,17 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
+          # Ensure pkg-config can find distro-installed .pc files across steps
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+          echo "Added PKG_CONFIG_PATH to GITHUB_ENV"
+          # If package provides only javascriptcoregtk-4.1.pc, create a compatibility symlink for 4.0
+          PKGDIR=/usr/lib/x86_64-linux-gnu/pkgconfig
+          if [ -d "$PKGDIR" ]; then
+            if [ -f "$PKGDIR/javascriptcoregtk-4.1.pc" ] && [ ! -f "$PKGDIR/javascriptcoregtk-4.0.pc" ]; then
+              sudo ln -s "$PKGDIR/javascriptcoregtk-4.1.pc" "$PKGDIR/javascriptcoregtk-4.0.pc" || true
+              echo "Created symlink javascriptcoregtk-4.0.pc -> javascriptcoregtk-4.1.pc"
+            fi
+          fi
 
       - name: Debug pkg-config/setup
         run: |
