@@ -5,6 +5,7 @@
 
 mod hardware;
 mod commands;
+mod db;
 
 use commands::{AppState, TelemetryState};
 

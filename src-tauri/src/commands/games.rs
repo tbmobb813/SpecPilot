@@ -1,37 +1,9 @@
 use serde::{Deserialize, Serialize};
-use sqlx::sqlite::SqlitePool;
-use std::sync::OnceLock;
-use tokio::sync::Mutex;
+// removed unused import to silence warnings
 use crate::hardware::HardwareProfile;
+use crate::db::get_db_pool;
 
-// Shared database pool - initialized once, reused for all queries
-static DB_POOL: OnceLock<Mutex<Option<SqlitePool>>> = OnceLock::new();
-
-async fn get_db_pool() -> Result<SqlitePool, String> {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
-
-    if let Some(pool) = guard.as_ref() {
-        return Ok(pool.clone());
-    }
-
-    let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
-    let db_url = format!("sqlite:{}", db_path);
-
-    let pool = SqlitePool::connect(&db_url)
-        .await
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
-
-    *guard = Some(pool.clone());
-    Ok(pool)
-}
-
-#[cfg(test)]
-async fn reset_db_pool() {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
-    *guard = None;
-}
+// Use shared DB pool from `db` module (see src/db.rs)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameResult {
@@ -75,6 +47,7 @@ struct GameRow {
     deck_status: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, sqlx::FromRow)]
 struct GameRequirementsRow {
     name: String,
@@ -134,7 +107,7 @@ pub async fn search_games(query: String) -> Result<Vec<GameResult>, String> {
 
 #[tauri::command]
 pub async fn browse_games(
-    filter_verdict: Option<String>,
+    _filter_verdict: Option<String>,
     filter_genre: Option<String>,
     limit: Option<i32>,
     offset: Option<i32>,
@@ -425,6 +398,7 @@ fn generate_tier_fallback_verdict(hardware: &HardwareProfile) -> VerdictResult {
     }
 }
 
+#[allow(dead_code)]
 fn find_db_path() -> Option<String> {
     use std::path::PathBuf;
 
@@ -479,6 +453,7 @@ mod tests {
     use tempfile::tempdir;
     use sqlx::sqlite::SqlitePool;
     use std::env;
+    use crate::db::reset_db_pool;
     use crate::hardware::{
         CpuInfo, GpuInfo, MemoryInfo, StorageInfo, OsInfo, GraphicsApiSupport,
         CpuTier, GpuTier, GpuVendor, StorageType,

@@ -129,6 +129,7 @@ pub enum StorageType {
 }
 
 // Error types
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum HardwareError {
     #[error("Failed to detect CPU: {0}")]

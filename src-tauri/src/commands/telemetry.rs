@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::State;
-use sqlx::sqlite::SqlitePool;
+use crate::db::get_db_pool;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TelemetryReport {
@@ -72,15 +72,9 @@ pub async fn set_telemetry_enabled(
 }
 
 async fn persist_telemetry_report(report: &TelemetryReport) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Get the database path
-    let db_path = get_intelligence_db_path()?;
-
-    if !std::path::Path::new(&db_path).exists() {
-        return Err("Intelligence database not found".into());
-    }
-
-    let db_url = format!("sqlite:{}", db_path);
-    let pool = SqlitePool::connect(&db_url).await?;
+    let pool = get_db_pool()
+        .await
+        .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
 
     sqlx::query(
         "INSERT INTO telemetry (game_id, hardware_hash, avg_fps, stable, settings, predicted_verdict)
@@ -98,36 +92,7 @@ async fn persist_telemetry_report(report: &TelemetryReport) -> Result<(), Box<dy
     Ok(())
 }
 
-fn get_intelligence_db_path() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    use std::path::PathBuf;
-
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    // Check directory of the running executable first (packaged app layouts)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("intelligence.db"));
-            candidates.push(parent.join("resources").join("intelligence.db"));
-            candidates.push(parent.join("..").join("share").join("specpilot").join("intelligence.db"));
-        }
-    }
-
-    // Fallback development locations
-    candidates.push(PathBuf::from("intelligence.db"));
-    candidates.push(PathBuf::from("../intelligence.db"));
-    candidates.push(PathBuf::from("data/intelligence.db"));
-
-    for p in candidates {
-        if p.exists() {
-            if let Some(s) = p.to_str() {
-                return Ok(s.to_string());
-            }
-        }
-    }
-
-    // As a last resort, return default filename (will likely not exist)
-    Ok("intelligence.db".to_string())
-}
+// DB path resolution and pool creation are centralized in `crate::db`
 
 #[cfg(test)]
 mod tests {

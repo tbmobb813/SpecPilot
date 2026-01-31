@@ -75,7 +75,9 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       // Check compatibility for each game if hardware is available
       // Process in batches to avoid overwhelming the backend
       if (hardwareProfile) {
-        const BATCH_SIZE = 20;
+        // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`, fallback to 20
+        const envSize = Number((import.meta as any).env?.VITE_GAME_CHECK_BATCH_SIZE);
+        const BATCH_SIZE = Number.isFinite(envSize) && envSize > 0 ? envSize : 20;
         const gamesWithVerdicts: GameResult[] = [];
 
         for (let i = 0; i < results.length; i += BATCH_SIZE) {
