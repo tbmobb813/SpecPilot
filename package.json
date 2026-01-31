@@ -14,7 +14,8 @@
     "import:gpus": "node scripts/import/passmark_gpus_import.js",
     "scrape:pcgw": "node scripts/scrapers/pcgamingwiki.js",
     "sync:protondb": "node scripts/sync/protondb.js",
-    "sync:steamdeck": "node scripts/sync/steamdeck.js"
+    "sync:steamdeck": "node scripts/sync/steamdeck.js",
+    "scrape:requirements": "node scripts/scrapers/steam_requirements.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.5.0",

@@ -21,6 +21,10 @@ fn main() {
             commands::submit_telemetry,
             commands::get_telemetry_enabled,
             commands::set_telemetry_enabled,
+            commands::search_games,
+            commands::browse_games,
+            commands::check_game_compatibility,
+            commands::run_readyup_checks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
