@@ -1,5 +1,5 @@
 mod common;
-mod platform;
+pub mod platform;
 
 pub use common::*;
 
