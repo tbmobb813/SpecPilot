@@ -50,7 +50,7 @@ function parseArgs() {
     } else if (/^\d+$/.test(a)) {
       out.ids.push(a);
     } else if (a.includes(',')) {
-      a.split(',').forEach(s => s.trim()).filter(Boolean).forEach(s => { if (/^\d+$/.test(s)) out.ids.push(s); });
+      a.split(',').map(s => s.trim()).filter(Boolean).forEach(s => { if (/^\d+$/.test(s)) out.ids.push(s); });
     }
   }
   return out;

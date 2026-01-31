@@ -48,14 +48,28 @@ async function main() {
       const insertStmt = db.prepare('INSERT INTO proton_compatibility(game_id, protondb_rating, total_reports, last_synced) VALUES (?, ?, ?, ?)');
       const updateStmt = db.prepare('UPDATE proton_compatibility SET protondb_rating = ?, total_reports = ?, last_synced = ? WHERE game_id = ?');
 
+      // Ensure games rows exist for steam app ids and use the games.id as the foreign key
+      const selectGameBySteamId = db.prepare('SELECT id FROM games WHERE steam_id = ?');
+      const insertGameBySteamId = db.prepare('INSERT INTO games(steam_id, name, data_source, created_at) VALUES (?, ?, ?, ?)');
+
       for (const [appId, report] of Object.entries(data)) {
         const rating = report.tier || report.rating || 'unknown';
         const total = report.total || report.total_reports || 0;
-        const existing = selectStmt.get(appId);
+
+        // ensure games row exists and get its PK id
+        let gameRow = selectGameBySteamId.get(appId);
+        if (!gameRow) {
+          const gameName = report.title || report.name || `App ${appId}`;
+          insertGameBySteamId.run(appId, gameName, 'protondb-summaries', now);
+          gameRow = selectGameBySteamId.get(appId);
+        }
+        const gameForeignId = gameRow.id;
+
+        const existing = selectStmt.get(gameForeignId);
         if (existing) {
-          updateStmt.run(rating, total, now, appId);
+          updateStmt.run(rating, total, now, gameForeignId);
         } else {
-          insertStmt.run(appId, rating, total, now);
+          insertStmt.run(gameForeignId, rating, total, now);
         }
         count++;
       }
@@ -109,9 +123,20 @@ async function main() {
           else if (page.includes('chromebook')) rating = 'chromebook';
 
           const now = new Date().toISOString();
-          const existing = selectStmt.get(appId);
-          if (existing) updateStmt.run(rating, 0, now, appId);
-          else insertStmt.run(appId, rating, 0, now);
+
+          // ensure games row exists for this steam id
+          const selectGameBySteamId = db.prepare('SELECT id FROM games WHERE steam_id = ?');
+          const insertGameBySteamId = db.prepare('INSERT INTO games(steam_id, name, data_source, created_at) VALUES (?, ?, ?, ?)');
+          let gameRow = selectGameBySteamId.get(appId);
+          if (!gameRow) {
+            insertGameBySteamId.run(appId, `App ${appId}`, 'protondb-scraper', now);
+            gameRow = selectGameBySteamId.get(appId);
+          }
+          const gameForeignId = gameRow.id;
+
+          const existing = selectStmt.get(gameForeignId);
+          if (existing) updateStmt.run(rating, 0, now, gameForeignId);
+          else insertStmt.run(gameForeignId, rating, 0, now);
           synced++;
         } catch (e) {
           // skip

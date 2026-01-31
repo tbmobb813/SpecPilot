@@ -18,6 +18,14 @@ function main() {
     db.exec('PRAGMA journal_mode = WAL;');
     db.exec(sql);
 
+    // Migration: add updated_at to gpus if missing (safe to run multiple times)
+    try {
+      db.prepare("ALTER TABLE gpus ADD COLUMN updated_at DATETIME").run();
+      console.log('Migration: added gpus.updated_at column');
+    } catch (e) {
+      // ignore if column already exists or other harmless errors
+    }
+
     const row = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
     console.log('Created/ensured tables:');
     row.forEach(r => console.log(' -', r.name));

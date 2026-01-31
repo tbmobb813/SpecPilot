@@ -90,6 +90,22 @@ This creates platform-specific installers in `src-tauri/target/release/bundle/`.
 
 ## Architecture
 
+## Documentation
+
+The project includes a set of detailed design and operational documents in the `docs/` folder. Key references:
+
+- [Quick Start Guide](docs/QUICKSTART.md) — getting the project running and common troubleshooting.
+- [Intelligence Layer](docs/INTELLIGENCE_LAYER.md) — database schema, scoring, and rules engine for game compatibility.
+- [Data Sources](docs/DATA_SOURCES.md) — external sources, scraping strategy, and rate limits.
+- [Scrapers](docs/SCRAPERS.md) — scraper design, selectors, and maintenance notes.
+- [ProtonDB Sync](docs/PROTONDB_SYNC.md) — usage and CLI options for ProtonDB synchronization.
+- [Data Import](docs/DATA_IMPORT.md) — formats and commands to import games and hardware data.
+- [Privacy & Telemetry](docs/PRIVACY.md) — opt-in telemetry, anonymization, and retention.
+- [Contributing](docs/CONTRIBUTING.md) — how to contribute, testing, and developer workflow.
+
+You can also open `docs/index.md` for a quick index of all documentation.
+
+
 ### Rust Backend
 
 The backend uses a **modular, platform-specific architecture**:

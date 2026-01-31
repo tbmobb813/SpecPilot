@@ -40,16 +40,31 @@ async function scrape(url) {
 
   // Upsert into DB
   const now = new Date().toISOString();
+  // Estimate a score for this GPU model (simple seeded mapping)
+  function getGpuScore(model) {
+    const m = (model || '').toLowerCase();
+    if (m.includes('rtx 4090') || m.includes('4090')) return 20000;
+    if (m.includes('rtx 4080') || m.includes('4080')) return 16000;
+    if (m.includes('rtx 3090') || m.includes('3090')) return 15000;
+    if (m.includes('rtx 3080') || m.includes('3080')) return 12000;
+    if (m.includes('rx 7900') || m.includes('7900')) return 18000;
+    if (m.includes('rtx 3070') || m.includes('3070')) return 9000;
+    if (m.includes('rtx 3060') || m.includes('3060')) return 7000;
+    if (m.includes('gtx 1650') || m.includes('1650')) return 2000;
+    if (m.includes('integrated') || m.includes('uhd') || m.includes('vega')) return 500;
+    return null;
+  }
+  const estimatedScore = getGpuScore(model);
   const existing = db.prepare('SELECT id FROM gpus WHERE model = ?').get(model);
   if (existing) {
     db.prepare(
-      `UPDATE gpus SET vendor = ?, vram_mb = COALESCE(?, vram_mb), tdp_w = COALESCE(?, tdp_w), data_source = ?, updated_at = ? WHERE id = ?`
-    ).run(vendor, vram, tdp, 'techpowerup', now, existing.id);
+      `UPDATE gpus SET vendor = ?, vram_mb = COALESCE(?, vram_mb), tdp_w = COALESCE(?, tdp_w), score = COALESCE(?, score), data_source = ?, updated_at = ? WHERE id = ?`
+    ).run(vendor, vram, tdp, estimatedScore, 'techpowerup', now, existing.id);
     console.log('Updated', model);
   } else {
     db.prepare(
-      `INSERT INTO gpus(model, vendor, vram_mb, tdp_w, data_source, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(model, vendor, vram, tdp, 'techpowerup', now);
+      `INSERT INTO gpus(model, vendor, vram_mb, tdp_w, score, data_source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(model, vendor, vram, tdp, estimatedScore, 'techpowerup', now);
     console.log('Inserted', model);
   }
 }

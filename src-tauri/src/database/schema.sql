@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS gpus (
   tier INTEGER,
   score REAL,
   data_source TEXT,
+  updated_at DATETIME,
   verified INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );

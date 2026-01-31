@@ -9,6 +9,9 @@
     "tauri": "tauri",
     "intelligence:init": "node scripts/intelligence_init.js",
     "scrape:gpus": "node scripts/scrapers/techpowerup.js",
+    "scrape:cpus": "node scripts/scrapers/scrape_cpus_v2.js",
+    "import:cpus": "node scripts/import/passmark_cpus_import.js",
+    "import:gpus": "node scripts/import/passmark_gpus_import.js",
     "scrape:pcgw": "node scripts/scrapers/pcgamingwiki.js",
     "sync:protondb": "node scripts/sync/protondb.js"
   },

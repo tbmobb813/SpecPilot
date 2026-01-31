@@ -363,12 +363,14 @@ fn parse_nvidia_smi_output(s: &str) -> Option<u64> {
 }
 
 // Default runner that executes commands on the host
+#[cfg(test)]
 fn default_runner(cmd: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(cmd).args(args).output().ok()?;
     Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 // Generic detect_vram which accepts an injectable runner for testing.
+#[cfg(test)]
 pub fn detect_vram_with_runner<F>(vendor: &GpuVendor, runner: F) -> Result<u64>
 where
     F: Fn(&str, &[&str]) -> Option<String>,
