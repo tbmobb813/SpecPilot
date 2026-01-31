@@ -92,6 +92,23 @@ jobs:
       - name: Check TypeScript
         run: npx tsc --noEmit
 
+      - name: Verify pkg-config env for Rust build
+        run: |
+          echo "--- ENV (partial) ---"
+          echo "PKG_CONFIG_PATH=")
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          env | grep -i PKG_CONFIG_PATH || true
+          echo "--- pkg-config versions and queries ---"
+          which pkg-config || true
+          pkg-config --version || true
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs glib-2.0 || true
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs gobject-2.0 || true
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs javascriptcoregtk-4.0 || true
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs javascriptcoregtk-4.1 || true
+          echo "--- list pkgconfig dir ---"
+          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig | grep -i javascriptcore || true
+          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig | grep -E "glib-2.0|gobject-2.0" || true
+
       - name: Build Rust
         run: cargo build --manifest-path src-tauri/Cargo.toml --verbose
 
