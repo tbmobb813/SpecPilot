@@ -36,6 +36,7 @@ jobs:
             libgdk-pixbuf2.0-dev \
             libatk1.0-dev \
             libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.0-dev \
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
@@ -48,9 +49,13 @@ jobs:
           ls -la /usr/lib/x86_64-linux-gnu/pkgconfig || true
           ls -la /usr/lib/pkgconfig || true
           ls -la /usr/share/pkgconfig || true
+          echo "Searching for javascriptcore pc files"
+          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig | grep -i javascriptcore || true
+          ls -la /usr/lib/pkgconfig | grep -i javascriptcore || true
           echo "Try pkg-config queries (non-fatal)"
           PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs glib-2.0 || true
           PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs gobject-2.0 || true
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs javascriptcoregtk-4.0 || true
 
       - name: Install Node dependencies
         run: npm ci
