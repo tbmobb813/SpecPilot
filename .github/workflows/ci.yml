@@ -8,7 +8,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pin to specific Ubuntu version for predictable packages
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
@@ -22,69 +23,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # Standard Tauri v1 dependencies for Ubuntu 22.04
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          # Probe multiple candidate package names for webkit/javascriptcore (varies by Ubuntu release)
-          WEBKIT_PKG=""
-          for p in libwebkit2gtk-4.1-dev libwebkit2gtk-4.0-dev; do
-            if apt-cache show "$p" >/dev/null 2>&1; then
-              WEBKIT_PKG="$p"
-              break
-            fi
-          done
-
-          JS_PKG=""
-          for p in libjavascriptcoregtk-4.1-dev libjavascriptcoregtk-4.0-dev javascriptcoregtk-4.1-dev javascriptcoregtk-4.0-dev; do
-            if apt-cache show "$p" >/dev/null 2>&1; then
-              JS_PKG="$p"
-              break
-            fi
-          done
-
-          echo "Detected packages -> webkit: ${WEBKIT_PKG:-'(none)'} javascriptcore: ${JS_PKG:-'(none)'}"
           sudo apt-get install -y \
-            pkg-config \
+            libwebkit2gtk-4.0-dev \
             build-essential \
-            libsoup2.4-dev \
-            libglib2.0-dev \
-            libgirepository1.0-dev \
-            libcairo2-dev \
-            libpango1.0-dev \
-            libgdk-pixbuf2.0-dev \
-            libatk1.0-dev \
-            ${WEBKIT_PKG:+$WEBKIT_PKG} \
-            ${JS_PKG:+$JS_PKG} \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-          # Ensure pkg-config can find distro-installed .pc files across steps
-          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
-          echo "Added PKG_CONFIG_PATH to GITHUB_ENV"
-          # If package provides only javascriptcoregtk-4.1.pc, create a compatibility symlink for 4.0
-          PKGDIR=/usr/lib/x86_64-linux-gnu/pkgconfig
-          if [ -d "$PKGDIR" ]; then
-            if [ -f "$PKGDIR/javascriptcoregtk-4.1.pc" ] && [ ! -f "$PKGDIR/javascriptcoregtk-4.0.pc" ]; then
-              sudo ln -s "$PKGDIR/javascriptcoregtk-4.1.pc" "$PKGDIR/javascriptcoregtk-4.0.pc" || true
-              echo "Created symlink javascriptcoregtk-4.0.pc -> javascriptcoregtk-4.1.pc"
-            fi
-          fi
-
-      - name: Debug pkg-config/setup
-        run: |
-          echo "pkg-config: $(pkg-config --version || echo 'not found')"
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          echo "Searching common pkgconfig dirs for glib/gobject pc files"
-          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig || true
-          ls -la /usr/lib/pkgconfig || true
-          ls -la /usr/share/pkgconfig || true
-          echo "Searching for javascriptcore pc files"
-          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig | grep -i javascriptcore || true
-          ls -la /usr/lib/pkgconfig | grep -i javascriptcore || true
-          echo "Try pkg-config queries (non-fatal)"
-          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs glib-2.0 || true
-          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs gobject-2.0 || true
-          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs javascriptcoregtk-4.0 || true
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
 
       - name: Install Node dependencies
         run: npm ci
@@ -92,25 +44,10 @@ jobs:
       - name: Check TypeScript
         run: npx tsc --noEmit
 
-      - name: Verify pkg-config env for Rust build
-        run: |
-          echo "--- ENV (partial) ---"
-          echo "PKG_CONFIG_PATH=")
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          env | grep -i PKG_CONFIG_PATH || true
-          echo "--- pkg-config versions and queries ---"
-          which pkg-config || true
-          pkg-config --version || true
-          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs glib-2.0 || true
-          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs gobject-2.0 || true
-          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs javascriptcoregtk-4.0 || true
-          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --cflags --libs javascriptcoregtk-4.1 || true
-          echo "--- list pkgconfig dir ---"
-          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig | grep -i javascriptcore || true
-          ls -la /usr/lib/x86_64-linux-gnu/pkgconfig | grep -E "glib-2.0|gobject-2.0" || true
-
       - name: Build Rust
-        run: cargo build --manifest-path src-tauri/Cargo.toml --verbose
+        working-directory: src-tauri
+        run: cargo build
 
       - name: Run Rust tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --verbose
+        working-directory: src-tauri
+        run: cargo test
