@@ -11,7 +11,7 @@ interface GameResult {
 }
 
 interface VerdictResult {
-  status: 'excellent' | 'good' | 'playable' | 'struggling' | 'unsupported' | 'unknown';
+  status: 'exceeds_recommended' | 'meets_recommended' | 'meets_minimum' | 'below_minimum' | 'unknown';
   confidence: 'high' | 'medium' | 'low';
   summary: string;
   details: string[];

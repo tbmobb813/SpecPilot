@@ -40,6 +40,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const [games, setGames] = useState<GameResult[]>([]);
   const [filteredGames, setFilteredGames] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   const [checkingGame, setCheckingGame] = useState<number | null>(null);
@@ -58,10 +59,11 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   // Apply filters when games or filters change
   useEffect(() => {
     applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter]);
+  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
 
   const loadGames = async () => {
     setLoading(true);
+    setLoadingProgress(null);
     setError(null);
 
     try {
@@ -96,6 +98,9 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
             })
           );
           gamesWithVerdicts.push(...batchResults);
+          
+          // Update progress indicator
+          setLoadingProgress({ current: gamesWithVerdicts.length, total: results.length });
         }
         setGames(gamesWithVerdicts);
       } else {
@@ -117,6 +122,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       setError(e as string);
     } finally {
       setLoading(false);
+      setLoadingProgress(null);
     }
   };
 
@@ -275,7 +281,11 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       <div className="game-library">
         <div className="loading-state">
           <div className="spinner"></div>
-          <p>Loading game library...</p>
+          {loadingProgress ? (
+            <p>Analyzing game compatibility... {loadingProgress.current} / {loadingProgress.total}</p>
+          ) : (
+            <p>Loading game library...</p>
+          )}
         </div>
       </div>
     );

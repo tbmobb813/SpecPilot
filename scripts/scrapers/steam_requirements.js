@@ -12,7 +12,6 @@
  */
 
 const axios = require('axios');
-const cheerio = require('cheerio');
 const Database = require('better-sqlite3');
 const path = require('path');
 
@@ -167,18 +166,6 @@ function parseCpuCores(cpuText) {
   if (cpuLower.includes('hexa-core') || cpuLower.includes('hexa core')) return 6;
   if (cpuLower.includes('octa-core') || cpuLower.includes('octa core')) return 8;
 
-  // Intel lookup
-  const intelPatterns = {
-    'i3': 4,      // Most i3s are 4 cores now
-    'i5-[0-6]': 4,  // Older i5s
-    'i5-[7-9]': 6,  // Newer i5s
-    'i5-1[0-4]': 6,
-    'i7-[0-6]': 4,
-    'i7-[7-9]': 8,
-    'i7-1[0-4]': 8,
-    'i9': 8,
-  };
-
   // Simplified Intel matching
   if (cpuLower.includes('i9')) return 8;
   if (cpuLower.includes('i7')) return 6;  // Conservative estimate
@@ -222,8 +209,6 @@ function parseCpuClock(cpuText) {
  */
 function parseRequirements(html) {
   if (!html) return null;
-
-  const $ = cheerio.load(html);
 
   // Extract text content, replacing <br> with newlines
   let text = html
@@ -563,75 +548,43 @@ async function main() {
 
   try {
     // Ensure new columns exist (migration)
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN genre TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN release_year INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN header_image TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN requirements_min_raw TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN requirements_rec_raw TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_cpu_cores INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_cpu_clock_ghz REAL`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_cpu_text TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_ram_mb INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_gpu_vram_mb INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_gpu_text TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_storage_gb INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN min_os TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_cpu_cores INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_cpu_clock_ghz REAL`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_cpu_text TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_ram_mb INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_gpu_vram_mb INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_gpu_text TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_storage_gb INTEGER`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN rec_os TEXT`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN requirements_parsed INTEGER DEFAULT 0`);
-    } catch (e) { /* Column exists */ }
-    try {
-      db.exec(`ALTER TABLE games ADD COLUMN updated_at DATETIME`);
-    } catch (e) { /* Column exists */ }
+    function addColumnIfNotExists(db, sql) {
+      try {
+        db.exec(sql);
+      } catch (e) {
+        const message = e && e.message ? String(e.message) : '';
+        // Swallow only "column already exists" type errors; surface everything else.
+        if (!/duplicate column name|already exists/i.test(message)) {
+          console.error('Failed to apply schema migration for SQL:', sql);
+          console.error(e);
+          throw e;
+        }
+      }
+    }
+
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN genre TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN release_year INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN header_image TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN requirements_min_raw TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN requirements_rec_raw TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_cpu_cores INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_cpu_clock_ghz REAL`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_cpu_text TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_ram_mb INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_gpu_vram_mb INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_gpu_text TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_storage_gb INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_os TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_cpu_cores INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_cpu_clock_ghz REAL`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_cpu_text TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_ram_mb INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_gpu_vram_mb INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_gpu_text TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_storage_gb INTEGER`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_os TEXT`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN requirements_parsed INTEGER DEFAULT 0`);
+    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN updated_at DATETIME`);
 
     // Add popular games if requested or if DB is empty
     if (fetchPopular) {

@@ -23,7 +23,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # Standard Tauri v1 dependencies for Ubuntu 22.04
+      # Tauri Linux dependencies for Ubuntu 22.04
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
