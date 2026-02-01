@@ -53,5 +53,5 @@ jobs:
 
       - name: Run Rust tests
         working-directory: src-tauri
-        # Use single thread to avoid race conditions in DB pool tests
-        run: cargo test -- --test-threads=1
+        # Run Rust tests (tests should be safe for parallel execution)
+        run: cargo test
