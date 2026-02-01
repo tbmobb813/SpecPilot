@@ -56,12 +56,6 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     loadGames();
   }, []);
 
-  // Filters application function
-  
-
-  // Filters application function (moved above effect to avoid TDZ)
-  
-
   const loadGames = async () => {
     setLoading(true);
     setLoadingProgress(null);
