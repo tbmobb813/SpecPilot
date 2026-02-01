@@ -1,18 +1,21 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig(async () => {
-  // Dynamically import the React plugin to avoid ESM/require resolution issues
-  const reactPlugin = (await import('@vitejs/plugin-react')).default;
+  const { default: react } = await import('@vitejs/plugin-react');
 
   return {
-    plugins: [reactPlugin()],
+    plugins: [react()],
     test: {
-      environment: 'jsdom',
       globals: true,
+      environment: 'jsdom',
       setupFiles: './vitest.setup.ts',
       coverage: {
         provider: 'v8',
         reporter: ['text', 'html'],
+        reportsDirectory: 'coverage/frontend',
+        all: true,
+        include: ['src/**/*.tsx', 'src/**/*.ts'],
+        exclude: ['src/api/**/*.ts', 'src/components/**/*.test.tsx'],
       },
     },
   };

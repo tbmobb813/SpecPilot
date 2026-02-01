@@ -7,6 +7,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage",
     "intelligence:init": "node scripts/intelligence_init.js",
     "scrape:gpus": "node scripts/scrapers/techpowerup.js",
     "scrape:cpus": "node scripts/scrapers/scrape_cpus_v2.js",
@@ -15,30 +17,29 @@
     "scrape:pcgw": "node scripts/scrapers/pcgamingwiki.js",
     "sync:protondb": "node scripts/sync/protondb.js",
     "sync:steamdeck": "node scripts/sync/steamdeck.js",
-    "scrape:requirements": "node scripts/scrapers/steam_requirements.js",
-    "test": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "scrape:requirements": "node scripts/scrapers/steam_requirements.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
     "axios": "^1.13.4",
     "better-sqlite3": "^12.6.2",
     "cheerio": "^1.2.0",
+    "jsdom": "^27.4.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^4.0.18",
+    "jsdom": "^22.1.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "vitest": "^4.0.18",
-    "@testing-library/react": "^14.0.0",
-    "@testing-library/jest-dom": "^6.0.0",
-    "jsdom": "^22.1.0",
-    "@vitest/coverage-v8": "^4.0.18"
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "esbuild": "^0.25.0"

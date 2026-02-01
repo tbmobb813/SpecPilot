@@ -1,42 +1,67 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
+import { TelemetrySettings } from '../TelemetrySettings';
+import { getTelemetryEnabled, setTelemetryEnabled, submitTelemetry } from '../../api/telemetry';
 
 vi.mock('../../api/telemetry', () => ({
   getTelemetryEnabled: vi.fn(),
   setTelemetryEnabled: vi.fn(),
   submitTelemetry: vi.fn(),
-  hashHardware: vi.fn(() => 'hash'),
+  hashHardware: vi.fn(() => 'deadbeef'),
 }));
 
-import { getTelemetryEnabled, setTelemetryEnabled, submitTelemetry } from '../../api/telemetry';
-import { TelemetrySettings } from '../TelemetrySettings';
+const mockedGet = vi.mocked(getTelemetryEnabled);
+const mockedSet = vi.mocked(setTelemetryEnabled);
+const mockedSubmit = vi.mocked(submitTelemetry);
+
+const hardwareProfile = {
+  cpu: { model: 'X', vendor: 'Y', cores: 2, threads: 4, base_clock: 2.0, architecture: 'x86_64', tier: 1 },
+  gpu: { model: 'G', vendor: 'Test', vram: 2048, driver_version: 'd', tier: 2 },
+  memory: { total: 4096, available: 3000 },
+  storage: { total: 256, available: 100, storage_type: 'SATA_SSD' },
+  os: { platform: 'linux', version: '1' },
+  graphics_api: {},
+};
 
 describe('TelemetrySettings', () => {
   beforeEach(() => {
-    (getTelemetryEnabled as any).mockReset?.();
-    (setTelemetryEnabled as any).mockReset?.();
-    (submitTelemetry as any).mockReset?.();
+    mockedGet.mockReset();
+    mockedSet.mockReset();
+    mockedSubmit.mockReset();
+    mockedGet.mockResolvedValue(false);
   });
 
-  it('loads and toggles telemetry and submits report', async () => {
-    (getTelemetryEnabled as any).mockResolvedValue(false);
-    (setTelemetryEnabled as any).mockResolvedValue(undefined);
-    (submitTelemetry as any).mockResolvedValue(undefined);
+  it('toggles telemetry and submits a report', async () => {
+    mockedGet.mockResolvedValueOnce(false);
+    mockedSet.mockResolvedValueOnce(undefined);
+    mockedSubmit.mockResolvedValueOnce(undefined);
 
-    const hardware = { cpu: {}, gpu: {}, memory: {}, storage: {}, os: {}, graphics_api: {} } as any;
+    render(<TelemetrySettings hardwareProfile={hardwareProfile as any} gameId={42} predictedVerdict={'meets_recommended'} />);
 
-    render(<TelemetrySettings hardwareProfile={hardware} gameId={123} />);
-
-    // Wait for loading to finish
-    await waitFor(() => expect(getTelemetryEnabled).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText(/Loading settings/)).not.toBeInTheDocument());
 
     const checkbox = screen.getByRole('checkbox');
     fireEvent.click(checkbox);
 
-    await waitFor(() => expect(setTelemetryEnabled).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(mockedSet).toHaveBeenCalledWith(true));
 
-    // Enable and submit
+    expect(screen.getByText(/Submit Performance Report/)).toBeInTheDocument();
+
+    const submitBtn = screen.getByRole('button', { name: /Submit Report/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => expect(mockedSubmit).toHaveBeenCalled());
+    expect(screen.getByText(/Thank you for your contribution/)).toBeInTheDocument();
+  });
+
+  it('shows error when missing profile or gameId', async () => {
+    mockedGet.mockResolvedValueOnce(true);
+    render(<TelemetrySettings hardwareProfile={null} gameId={undefined as any} />);
+    await waitFor(() => expect(screen.queryByText(/Loading settings/)).not.toBeInTheDocument());
+
+    const checkbox = screen.getByRole('checkbox');
     fireEvent.click(checkbox);
-    await waitFor(() => expect(setTelemetryEnabled).toHaveBeenCalled());
+
+    expect(screen.queryByText(/Submit Performance Report/)).not.toBeInTheDocument();
   });
 });

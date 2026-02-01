@@ -1,52 +1,63 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
+import { HardwareScan } from '../HardwareScan';
+import { scanHardware, getCachedProfile } from '../../api/hardware';
 
 vi.mock('../../api/hardware', () => ({
   scanHardware: vi.fn(),
   getCachedProfile: vi.fn(),
 }));
 
-import { getCachedProfile, scanHardware } from '../../api/hardware';
-import { HardwareScan } from '../HardwareScan';
+const mockedScan = vi.mocked(scanHardware);
+const mockedCached = vi.mocked(getCachedProfile);
+
+const sampleProfile = {
+  cpu: { model: 'T-CPU', vendor: 'TestCo', cores: 4, threads: 8, base_clock: 3.2, architecture: 'x86_64', tier: 3 },
+  gpu: { model: 'T-GPU', vendor: 'Test', vram: 4096, driver_version: 'd', tier: 4 },
+  memory: { total: 8192, available: 7000 },
+  storage: { total: 512, available: 200, storage_type: 'NVMe_SSD' },
+  os: { platform: 'linux', version: '1.0' },
+  graphics_api: {},
+};
 
 describe('HardwareScan', () => {
   beforeEach(() => {
-    (getCachedProfile as any).mockReset?.();
-    (scanHardware as any).mockReset?.();
+    mockedScan.mockReset();
+    mockedCached.mockReset();
   });
 
-  it('renders and shows cached profile when available', async () => {
-    (getCachedProfile as any).mockResolvedValue({
-      cpu: { model: 'CPU', vendor: 'V', cores: 4, threads: 8, base_clock: 3.0, architecture: 'x86_64', tier: 3 },
-      gpu: { model: 'GPU', vendor: 'V', vram: 4096, driver_version: '1.0', tier: 3 },
-      memory: { total: 16000, available: 8000 },
-      storage: { total: 500, available: 200, storage_type: 'nvme' },
-      os: { platform: 'linux', version: '1' },
-      graphics_api: { vulkan: { version: '1.2', ray_tracing: false, mesh_shaders: false } }
-    });
+  it('shows cached profile when available', async () => {
+    mockedCached.mockResolvedValue(sampleProfile as any);
 
     render(<HardwareScan />);
 
-    expect(await screen.findByText('CPU')).toBeInTheDocument();
-    expect(screen.getByText('GPU')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/System Hardware Scan/)).toBeInTheDocument());
+    expect(await screen.findByText('T-CPU')).toBeInTheDocument();
+    expect(screen.getByText(/T-GPU/)).toBeInTheDocument();
   });
 
-  it('runs scan when button clicked', async () => {
-    (getCachedProfile as any).mockResolvedValue(null);
-    (scanHardware as any).mockResolvedValue({
-      cpu: { model: 'CPU', vendor: 'V', cores: 2, threads: 4, base_clock: 2.5, architecture: 'x86_64', tier: 2 },
-      gpu: { model: 'GPU', vendor: 'V', vram: 2048, driver_version: '1.0', tier: 2 },
-      memory: { total: 8000, available: 4000 },
-      storage: { total: 250, available: 100, storage_type: 'ssd' },
-      os: { platform: 'linux', version: '1' },
-      graphics_api: { vulkan: { version: '1.1', ray_tracing: false, mesh_shaders: false } }
-    });
+  it('performs a scan and displays results', async () => {
+    mockedCached.mockResolvedValue(null);
+    mockedScan.mockResolvedValue(sampleProfile as any);
 
     render(<HardwareScan />);
 
-    const btn = screen.getByRole('button', { name: /Scan My PC/i });
-    fireEvent.click(btn);
+    const scanBtn = screen.getByRole('button', { name: /Scan My PC/i });
+    fireEvent.click(scanBtn);
 
-    expect(await screen.findByText('CPU')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Scanning...')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('T-CPU')).toBeInTheDocument());
+  });
+
+  it('shows error when scan fails', async () => {
+    mockedCached.mockResolvedValue(null);
+    mockedScan.mockRejectedValue(new Error('failed'));
+
+    render(<HardwareScan />);
+
+    const scanBtn = screen.getByRole('button', { name: /Scan My PC/i });
+    fireEvent.click(scanBtn);
+
+    expect(await screen.findByText(/Error:/)).toBeInTheDocument();
   });
 });
