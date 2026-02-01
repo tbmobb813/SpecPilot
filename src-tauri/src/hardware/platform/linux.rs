@@ -586,10 +586,13 @@ fn test_parse_rocm_smi_output_number_token() {
 }
 
 #[test]
-fn test_detect_vram_unknown_returns_zero() {
-    // Unknown vendor should return Ok(0)
+fn test_detect_vram_unknown_uses_fallback() {
+    // Unknown vendor will try glxinfo fallback
+    // On systems with glxinfo, this may return actual VRAM
+    // On systems without, it returns 0
     let v = detect_vram(&GpuVendor::Unknown).unwrap();
-    assert_eq!(v, 0);
+    // Just verify it doesn't error - value depends on system
+    assert!(v >= 0);
 }
 
 #[test]
@@ -624,6 +627,37 @@ fn test_detect_vram_with_runner_amd() {
     let runner = |_: &str, _: &[&str]| Some("VRAM : 2048MB".to_string());
     let v = detect_vram_with_runner(&GpuVendor::AMD, runner).unwrap();
     assert_eq!(v, 2048);
+}
+
+#[test]
+fn test_parse_pci_resource_vram() {
+    // Simulated PCI resource file content with 8GB VRAM BAR
+    let content = "0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x00000000c0000000 0x00000000cfffffff 0x0000000000040200
+0x0000000080000000 0x000000009fffffff 0x000000000014220c";
+    // Second line is ~256MB (display), third is ~512MB
+    // Let's use a more realistic example with 8GB
+    let content_8gb = "0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x0000004000000000 0x00000041ffffffff 0x000000000014220c";
+    // 0x41ffffffff - 0x4000000000 = 0x1ffffffff = 8589934591 bytes = ~8GB
+    let result = parse_pci_resource_vram(content_8gb);
+    assert!(result.is_some());
+    let vram = result.unwrap();
+    assert!(vram >= 8000); // Should be around 8192 MB
+}
+
+#[test]
+fn test_parse_radeontop_vram() {
+    let output = "bus 03, gpu 45.00%, ee 0.00%, vv 0.00%, vram 15.23% 1234mb/8192mb";
+    let result = parse_radeontop_vram(output);
+    assert_eq!(result, Some(8192));
+}
+
+#[test]
+fn test_parse_radeontop_vram_no_match() {
+    let output = "some random output without vram info";
+    let result = parse_radeontop_vram(output);
+    assert_eq!(result, None);
 }
 
 fn detect_driver_version(vendor: &GpuVendor) -> Result<String> {

@@ -1,4 +1,4 @@
-use crate::hardware::common::*;
+use crate::hardware::*;
 
 #[derive(Debug, Clone)]
 pub enum BottleneckType {
@@ -9,6 +9,11 @@ pub enum BottleneckType {
     StorageSlow,
     FeatureMissing(String),
     DriverOutdated,
+    // Linux-specific bottlenecks
+    AntiCheatBlocked(String),   // Anti-cheat blocks Linux play
+    ProtonIssues(String),       // ProtonDB reports issues
+    ProtonBorked,               // Game does not work on Linux
+    ProtonTweaksRequired,       // Works but needs launch options
 }
 
 #[derive(Debug, Clone)]

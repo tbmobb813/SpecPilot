@@ -267,11 +267,9 @@ npm run scrape:checkmydeck
 
 **Example:**
 
-```
 Game: Starfield
 Issue: Crashes on AMD Radeon driver 23.7.1
 Fix: Update to 23.8.2 or later
-```
 
 **Scraping strategy:**
 
@@ -396,13 +394,12 @@ npm run scrape:gpus -- --delay=1000  # 1 second between requests
 
 **Attribution:**
 
-```
 Data sources:
-- GPU specifications from TechPowerUp (https://www.techpowerup.com)
-- Game requirements from PCGamingWiki (https://www.pcgamingwiki.com)
-- Linux compatibility from ProtonDB (https://www.protondb.com)
+
+- GPU specifications from TechPowerUp (<https://www.techpowerup.com>)
+- Game requirements from PCGamingWiki (<https://www.pcgamingwiki.com>)
+- Linux compatibility from ProtonDB (<https://www.protondb.com>)
 - Steam Deck compatibility from Valve
-```
 
 ---
 

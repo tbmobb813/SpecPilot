@@ -177,10 +177,28 @@ CREATE TABLE IF NOT EXISTS benchmark_sources (
 CREATE INDEX IF NOT EXISTS idx_bench_game ON benchmark_sources(game_id);
 CREATE INDEX IF NOT EXISTS idx_bench_gpu ON benchmark_sources(gpu_model);
 
+-- Anti-cheat status from areweanticheatyet.com and other sources
+CREATE TABLE IF NOT EXISTS anti_cheat_status (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  steam_id INTEGER UNIQUE,
+  game_name TEXT,
+  anti_cheat_type TEXT,           -- 'EasyAntiCheat', 'BattlEye', 'Vanguard', etc.
+  linux_status TEXT,              -- 'supported', 'denied', 'broken', 'unknown'
+  notes TEXT,                     -- Additional context
+  source TEXT,                    -- 'areweanticheatyet', 'manual', etc.
+  source_url TEXT,
+  last_updated DATETIME,
+  created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_anticheat_steam ON anti_cheat_status(steam_id);
+CREATE INDEX IF NOT EXISTS idx_anticheat_type ON anti_cheat_status(anti_cheat_type);
+CREATE INDEX IF NOT EXISTS idx_anticheat_status ON anti_cheat_status(linux_status);
+
 -- Simple version table
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT
 );
 
-INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version','2');
+INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version','3');

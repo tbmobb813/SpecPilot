@@ -116,14 +116,14 @@ SpecPilot/
 
 **Detection Capabilities:**
 
-| Component     | Linux Method                          | Windows Method    |
-|---------------|---------------------------------------|-------------------|
-| **CPU**       | `/proc/cpuinfo`, `lscpu`              | WMI (Win32_Processor) |
-| **GPU**       | `lspci`, `nvidia-smi`, `rocm-smi`     | WMI (Win32_VideoController) |
-| **Memory**    | `/proc/meminfo`, `dmidecode`          | GlobalMemoryStatusEx API |
-| **Storage**   | `df`, `lsblk`                         | WMI (Win32_LogicalDisk) |
-| **OS**        | `/etc/os-release`, `/proc/version`    | WMI (Win32_OperatingSystem) |
-| **Graphics API** | `vulkaninfo`, `glxinfo`            | DirectX APIs |
+| Component        | Linux Method                          | Windows Method              |
+|------------------|---------------------------------------|-----------------------------|
+| **CPU**          | `/proc/cpuinfo`, `lscpu`              | WMI (Win32_Processor)       |
+| **GPU**          | `lspci`, `nvidia-smi`, `rocm-smi`     | WMI (Win32_VideoController) |
+| **Memory**       | `/proc/meminfo`, `dmidecode`          | GlobalMemoryStatusEx API    |
+| **Storage**      | `df`, `lsblk`                         | WMI (Win32_LogicalDisk)     |
+| **OS**           | `/etc/os-release`, `/proc/version`    | WMI (Win32_OperatingSystem) |
+| **Graphics API** | `vulkaninfo`, `glxinfo`               | DirectX APIs                |
 
 ### Frontend (React + TypeScript)
 
