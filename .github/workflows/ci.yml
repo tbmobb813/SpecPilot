@@ -45,7 +45,7 @@ jobs:
             patchelf
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Check TypeScript
         run: npx tsc --noEmit
