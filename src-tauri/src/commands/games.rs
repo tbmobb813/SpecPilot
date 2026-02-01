@@ -461,9 +461,11 @@ mod tests {
         let db_path = td.path().join("intelligence.db");
         let db_str = db_path.to_str().unwrap().to_string();
 
-        // Use ?mode=rwc to create the database file
+        // Use ?mode=rwc to create the database file and register it
+        // with the shared pool used by `check_game_compatibility`.
         let db_url = format!("sqlite:{}?mode=rwc", db_str);
         let pool = SqlitePool::connect(&db_url).await.unwrap();
+        crate::db::set_db_pool_for_tests(pool.clone()).await;
 
         // Create schema with all columns that check_game_compatibility expects
         sqlx::query(
@@ -507,11 +509,8 @@ mod tests {
         .await
         .unwrap();
 
-        // Make the test process current dir the temp dir so find_db_path finds intelligence.db
-        let orig_dir = env::current_dir().unwrap();
-        env::set_current_dir(td.path()).unwrap();
-
         // Build a hardware profile that has more than minimum but there are no recommended values
+        // Note: set_db_pool_for_tests already registered the pool, so no CWD change needed
         let hw = HardwareProfile {
             cpu: CpuInfo { model: "TestCPU".into(), vendor: "TestVendor".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
             gpu: GpuInfo { model: "TestGPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
@@ -525,9 +524,6 @@ mod tests {
 
         // Should not be incorrectly classified as exceeds_recommended when rec fields are missing
         assert_ne!(verdict.status, "exceeds_recommended");
-
-        // restore cwd
-        env::set_current_dir(orig_dir).unwrap();
     }
 
     #[tokio::test]
@@ -539,9 +535,11 @@ mod tests {
         let db_path = td.path().join("intelligence.db");
         let db_str = db_path.to_str().unwrap().to_string();
 
-        // Use ?mode=rwc to create the database file
+        // Use ?mode=rwc to create the database file and register it
+        // with the shared pool used by `check_game_compatibility`.
         let db_url = format!("sqlite:{}?mode=rwc", db_str);
         let pool = SqlitePool::connect(&db_url).await.unwrap();
+        crate::db::set_db_pool_for_tests(pool.clone()).await;
 
         // Create schema with all columns that check_game_compatibility expects
         sqlx::query(
@@ -586,8 +584,7 @@ mod tests {
         .await
         .unwrap();
 
-        let orig_dir = env::current_dir().unwrap();
-        env::set_current_dir(td.path()).unwrap();
+        // No process-wide cwd changes required; tests register the pool directly.
 
         let hw = HardwareProfile {
             cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 8, threads: 8, base_clock: 3.0, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Performance },
@@ -601,6 +598,6 @@ mod tests {
         let verdict = check_game_compatibility(2, hw).await.unwrap();
         assert_eq!(verdict.status, "exceeds_recommended");
 
-        env::set_current_dir(orig_dir).unwrap();
+        // No cwd restore needed.
     }
 }

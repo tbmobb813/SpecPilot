@@ -54,6 +54,16 @@ pub async fn get_db_pool() -> Result<SqlitePool, String> {
     Ok(pool)
 }
 
+/// Test helper: set the global DB pool to a provided `SqlitePool`.
+/// This is used by unit tests to ensure the shared pool points at the
+/// temporary database created during tests.
+#[cfg(test)]
+pub async fn set_db_pool_for_tests(pool: SqlitePool) {
+    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
+    let mut guard = mutex.lock().await;
+    *guard = Some(pool);
+}
+
 #[cfg(test)]
 pub async fn reset_db_pool() {
     let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
