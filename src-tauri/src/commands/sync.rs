@@ -49,3 +49,14 @@ pub async fn sync_protondb(app_handle: tauri::AppHandle) -> Result<String, Strin
 
     Err("ProtonDB sync script not found. Ensure scripts/sync/protondb.js exists in the project root.".to_string())
 }
+
+// Note: Integration tests for sync_protondb would require mocking AppHandle,
+// which is complex and typically done in Tauri integration tests.
+// The function includes several testable paths:
+// 1. Node.js not installed or not in PATH
+// 2. Node.js installed but not working correctly
+// 3. App directory resolution failure
+// 4. Script not found within MAX_SCRIPT_SEARCH_DEPTH
+// 5. Script found but execution fails
+// 6. Script found and execution succeeds
+// These scenarios should be tested in integration tests with a proper Tauri test harness.
