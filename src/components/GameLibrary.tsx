@@ -64,8 +64,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
 
     try {
       const results: GameResult[] = await invokeTauri('browse_games', {
-        filterVerdict: null,
-        filterGenre: null,
+        filter_verdict: null,
+        filter_genre: null,
         limit: 500,
         offset: 0,
       });
@@ -107,7 +107,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
             batch.map(async (game) => {
               try {
                 const verdict: VerdictResult = await invokeTauri('check_game_compatibility', {
-                  steamId: game.steam_id,
+                  steam_id: game.steam_id,
                   hardware: hardwareProfile,
                 });
                 return { ...game, verdict };
@@ -205,7 +205,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     setCheckingGame(game.steam_id);
     try {
       const verdict: VerdictResult = await invokeTauri('check_game_compatibility', {
-        steamId: game.steam_id,
+        steam_id: game.steam_id,
         hardware: hardwareProfile,
       });
       setSelectedGame({ ...game, verdict });
