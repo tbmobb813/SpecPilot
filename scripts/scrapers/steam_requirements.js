@@ -579,23 +579,12 @@ async function main() {
     addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN requirements_min_raw TEXT`);
     addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN requirements_rec_raw TEXT`);
     addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_cpu_cores INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_cpu_clock_ghz REAL`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_cpu_text TEXT`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_ram_mb INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_gpu_vram_mb INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_gpu_text TEXT`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_storage_gb INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN min_os TEXT`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_cpu_cores INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_cpu_clock_ghz REAL`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_cpu_text TEXT`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_ram_mb INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_gpu_vram_mb INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_gpu_text TEXT`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_storage_gb INTEGER`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN rec_os TEXT`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN requirements_parsed INTEGER DEFAULT 0`);
-    addColumnIfNotExists(db, `ALTER TABLE games ADD COLUMN updated_at DATETIME`);
+    // Schema management note:
+    // The `games` table is expected to already include all requirement-related
+    // columns (min_*, rec_*, requirements_parsed, updated_at, etc.) as defined
+    // in the project's schema.sql / migration system. This scraper should not
+    // perform inline schema migrations (e.g., ALTER TABLE ... ADD COLUMN ...)
+    // to avoid schema drift between different environments.
 
     // Add popular games if requested or if DB is empty
     if (fetchPopular) {
