@@ -11,12 +11,13 @@ const MAX_SCRIPT_SEARCH_DEPTH: usize = 5;
 #[tauri::command]
 pub async fn sync_protondb(app_handle: tauri::AppHandle) -> Result<String, String> {
     // Check if Node.js is available
-    if Command::new("node")
+    let node_check = Command::new("node")
         .arg("--version")
         .output()
-        .is_err()
-    {
-        return Err("Node.js is not installed or not found in PATH. Please install Node.js to use this feature.".to_string());
+        .map_err(|_| "Node.js is not installed or not found in PATH. Please install Node.js to use this feature.".to_string())?;
+    
+    if !node_check.status.success() {
+        return Err("Node.js is installed but not working correctly. Please verify your Node.js installation.".to_string());
     }
 
     // Get the app's resource directory and construct absolute path to script

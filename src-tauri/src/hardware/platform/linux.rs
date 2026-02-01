@@ -320,20 +320,7 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
                             
                             // Extract the first contiguous sequence of digits
                             // This handles formats like "8192", "8192 MB", "VRAM: 8192", etc.
-                            let mut digits_str = String::new();
-                            let mut found_digit = false;
-                            
-                            for ch in vram_trim.chars() {
-                                if ch.is_digit(10) {
-                                    digits_str.push(ch);
-                                    found_digit = true;
-                                } else if found_digit {
-                                    // Stop at the first non-digit after we've found digits
-                                    break;
-                                }
-                            }
-                            
-                            if let Ok(digits) = digits_str.parse::<u64>() {
+                            if let Some(digits) = extract_first_digits(vram_trim) {
                                 // Many sysfs values are bytes; if value seems large assume bytes
                                 if digits > (16 * 1024 * 1024) { // >16MB in bytes
                                     return Ok(digits / (1024 * 1024));
@@ -482,6 +469,26 @@ fn parse_radeontop_vram(output: &str) -> Option<u64> {
         }
     }
     None
+}
+
+/// Extract the first contiguous sequence of digits from a string.
+/// This handles formats like "8192", "8192 MB", "VRAM: 8192 MB (used: 2048)", etc.
+/// Returns None if no digits are found.
+fn extract_first_digits(s: &str) -> Option<u64> {
+    let mut digits_str = String::new();
+    let mut found_digit = false;
+    
+    for ch in s.chars() {
+        if ch.is_digit(10) {
+            digits_str.push(ch);
+            found_digit = true;
+        } else if found_digit {
+            // Stop at the first non-digit after we've found digits
+            break;
+        }
+    }
+    
+    digits_str.parse::<u64>().ok()
 }
 
 // Parse `rocm-smi --showmeminfo` (or similar) output for a VRAM value in MB.
@@ -646,6 +653,38 @@ fn test_detect_vram_unknown_uses_fallback() {
     // Just verify it doesn't error - value depends on system
     let _ = v;
 }
+
+#[test]
+fn test_extract_first_digits_simple() {
+    assert_eq!(extract_first_digits("8192"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_with_units() {
+    assert_eq!(extract_first_digits("8192 MB"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_with_prefix() {
+    assert_eq!(extract_first_digits("VRAM: 8192"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_multiple_numbers() {
+    // Should extract only the first number, not concatenate
+    assert_eq!(extract_first_digits("VRAM: 8192 MB (used: 2048)"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_no_digits() {
+    assert_eq!(extract_first_digits("No numbers here"), None);
+}
+
+#[test]
+fn test_extract_first_digits_bytes_format() {
+    assert_eq!(extract_first_digits("8589934592"), Some(8589934592));
+}
+
 
 #[test]
 fn test_parse_nvidia_smi_output_csv() {

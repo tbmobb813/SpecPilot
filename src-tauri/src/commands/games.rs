@@ -809,4 +809,152 @@ mod tests {
 
         // No cwd restore needed.
     }
+
+    #[tokio::test]
+    async fn test_anti_cheat_blocked_high_confidence() {
+        // Test that anti-cheat blocking returns high confidence verdict
+        reset_db_pool().await;
+
+        let td = tempdir().unwrap();
+        let db_path = td.path().join("intelligence.db");
+        let db_str = db_path.to_str().unwrap().to_string();
+        let db_url = format!("sqlite:{}?mode=rwc", db_str);
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+        crate::db::set_db_pool_for_tests(pool.clone()).await;
+
+        // Create games table
+        sqlx::query(
+            r#"CREATE TABLE games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                steam_id INTEGER,
+                name TEXT,
+                min_cpu_cores INTEGER,
+                min_ram_mb INTEGER,
+                min_gpu_vram_mb INTEGER,
+                min_storage_gb INTEGER,
+                requirements_parsed INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create anti_cheat_status table
+        sqlx::query(
+            r#"CREATE TABLE anti_cheat_status (
+                steam_id INTEGER PRIMARY KEY,
+                anti_cheat_type TEXT,
+                linux_status TEXT
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a game
+        sqlx::query("INSERT INTO games (steam_id, name, requirements_parsed) VALUES ($1, $2, $3)")
+            .bind(100i64)
+            .bind("Blocked Game")
+            .bind(0i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Insert anti-cheat status with "denied" status
+        sqlx::query("INSERT INTO anti_cheat_status (steam_id, anti_cheat_type, linux_status) VALUES ($1, $2, $3)")
+            .bind(100i64)
+            .bind("EasyAntiCheat")
+            .bind("denied")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let hw = HardwareProfile {
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd },
+            os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
+            graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
+        };
+
+        let verdict = check_game_compatibility(100, hw).await.unwrap();
+        assert_eq!(verdict.status, "below_minimum");
+        assert_eq!(verdict.confidence, "high");
+        assert!(verdict.summary.contains("anti-cheat"));
+    }
+
+    #[tokio::test]
+    async fn test_protondb_borked_high_confidence() {
+        // Test that ProtonDB "borked" rating returns high confidence verdict
+        reset_db_pool().await;
+
+        let td = tempdir().unwrap();
+        let db_path = td.path().join("intelligence.db");
+        let db_str = db_path.to_str().unwrap().to_string();
+        let db_url = format!("sqlite:{}?mode=rwc", db_str);
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+        crate::db::set_db_pool_for_tests(pool.clone()).await;
+
+        // Create games table
+        sqlx::query(
+            r#"CREATE TABLE games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                steam_id INTEGER,
+                name TEXT,
+                min_cpu_cores INTEGER,
+                min_ram_mb INTEGER,
+                min_gpu_vram_mb INTEGER,
+                min_storage_gb INTEGER,
+                requirements_parsed INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create proton_compatibility table
+        sqlx::query(
+            r#"CREATE TABLE proton_compatibility (
+                steam_id INTEGER PRIMARY KEY,
+                tier TEXT,
+                total_reports INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a game
+        sqlx::query("INSERT INTO games (steam_id, name, requirements_parsed) VALUES ($1, $2, $3)")
+            .bind(200i64)
+            .bind("Borked Game")
+            .bind(0i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Insert ProtonDB rating as "borked"
+        sqlx::query("INSERT INTO proton_compatibility (steam_id, tier, total_reports) VALUES ($1, $2, $3)")
+            .bind(200i64)
+            .bind("borked")
+            .bind(50i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let hw = HardwareProfile {
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd },
+            os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
+            graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
+        };
+
+        let verdict = check_game_compatibility(200, hw).await.unwrap();
+        assert_eq!(verdict.status, "below_minimum");
+        assert_eq!(verdict.confidence, "high");
+        assert!(verdict.summary.contains("Borked"));
+    }
 }
