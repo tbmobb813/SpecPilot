@@ -1,8 +1,13 @@
 use std::process::Command;
 use std::path::PathBuf;
 
+// Maximum number of parent directories to traverse when searching for the script
+const MAX_SCRIPT_SEARCH_DEPTH: usize = 5;
+
 /// Trigger the ProtonDB sync Node script from the Tauri backend.
 /// Returns stdout on success, or stderr on failure.
+/// Note: This command is intended for development use. In production, ensure Node.js
+/// dependencies are properly installed or consider alternative sync mechanisms.
 #[tauri::command]
 pub async fn sync_protondb(app_handle: tauri::AppHandle) -> Result<String, String> {
     // Check if Node.js is available
@@ -20,13 +25,11 @@ pub async fn sync_protondb(app_handle: tauri::AppHandle) -> Result<String, Strin
         .app_dir()
         .ok_or_else(|| "Failed to resolve app directory".to_string())?;
     
-    // Navigate up from app_dir to project root, then to scripts/sync/protondb.js
-    // In development: app_dir is typically src-tauri/target/debug or similar
-    // In production: we need to ensure the script is bundled as a resource
     let mut script_path = PathBuf::from(&app_dir);
     
-    // Try to find the script by going up directories
-    for _ in 0..5 {
+    // Search for the script by traversing up the directory tree
+    // This handles both development and production scenarios where app_dir depth may vary
+    for _ in 0..MAX_SCRIPT_SEARCH_DEPTH {
         script_path.pop();
         let candidate = script_path.join("scripts/sync/protondb.js");
         if candidate.exists() {
