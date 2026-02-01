@@ -80,10 +80,19 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       // 3) Move batch processing server-side (bundle checks into fewer IPC calls).
       // 4) Reduce default batch size via `VITE_GAME_CHECK_BATCH_SIZE` for low-power devices.
       if (hardwareProfile) {
-        // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`, fallback to 20
+        // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`.
+        // Configuration:
+        //   - Define `VITE_GAME_CHECK_BATCH_SIZE=<positive integer>` in your `.env`, `.env.local`,
+        //     or other Vite-supported env file.
+        //   - This value controls how many games are checked per IPC batch when calling
+        //     `check_game_compatibility`. Smaller values reduce peak load/IPC pressure
+        //     but may increase total elapsed time.
+        //   - If the variable is unset, non-numeric, or not a positive number, the default
+        //     `DEFAULT_BATCH_SIZE` (20) is used.
         const rawBatchSize = import.meta?.env?.VITE_GAME_CHECK_BATCH_SIZE;
         const envSize = typeof rawBatchSize === 'string' ? Number(rawBatchSize) : NaN;
-        const BATCH_SIZE = Number.isFinite(envSize) && envSize > 0 ? envSize : 20;
+        const DEFAULT_BATCH_SIZE = 20;
+        const BATCH_SIZE = Number.isFinite(envSize) && envSize > 0 ? envSize : DEFAULT_BATCH_SIZE;
 
         // Show games immediately without verdicts, then update progressively
         setGames(results);
