@@ -645,3 +645,54 @@ As you build, reference these:
 ---
 
 **You now have a complete roadmap. Start with Week 1 tasks and work your way through. Good luck!** 🚀
+
+---
+
+## CI & Coverage
+
+- **Frontend (Vitest)**: run `npm run test:coverage`. HTML report is written to `coverage/frontend/index.html`.
+- **Switch provider (optional)**: to use V8 coverage, install `@vitest/coverage-v8` and set `coverage.provider = 'v8'` in `vitest.config.ts` (may require Node >=16 and platform checks).
+- **Rust (tarpaulin)**: run `cargo tarpaulin --lib --out Html` to produce `tarpaulin-report.html` (running on the library target avoids native GUI/native lib symbol conflicts).
+
+### CI job examples
+
+Frontend coverage job (upload HTML artifact):
+
+```yaml
+jobs:
+  frontend-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: coverage/frontend
+```
+
+Rust coverage job (install native deps, run tarpaulin, upload report):
+
+```yaml
+jobs:
+  rust-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native deps
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libglib2.0-dev libsoup2.4-dev libjavascriptcoregtk-4.0-dev
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo tarpaulin --lib --out Html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-tarpaulin
+          path: tarpaulin-report.html
+```
+
+These snippets are minimal — tune the jobs for caching, matrix runs, and artifact publishing (Codecov/Coveralls) as needed.

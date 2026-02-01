@@ -7,6 +7,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage",
     "intelligence:init": "node scripts/intelligence_init.js",
     "scrape:gpus": "node scripts/scrapers/techpowerup.js",
     "scrape:cpus": "node scripts/scrapers/scrape_cpus_v2.js",
@@ -22,16 +24,21 @@
     "axios": "^1.13.4",
     "better-sqlite3": "^12.6.2",
     "cheerio": "^1.2.0",
+    "jsdom": "^27.4.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^14.0.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-c8": "^0.32.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^0.32.0"
   },
   "overrides": {
     "esbuild": "^0.25.0"
