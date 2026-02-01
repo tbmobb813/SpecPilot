@@ -1,11 +1,14 @@
 use sqlx::sqlite::SqlitePool;
 use std::path::PathBuf;
-use tokio::sync::OnceCell;
 use std::borrow::Cow;
-use std::error::Error;
+use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
+// Test helpers below use an unsafe primitive to reset the global OnceCell
+// during tests where a fresh SqlitePool is needed per-test.
 
-// Shared database pool - initialized once, reused for all queries
-static DB_POOL: OnceCell<SqlitePool> = OnceCell::const_new();
+// Shared database pool - initialized once, reused for all queries.
+// Use a mutex-wrapped Option so tests can set/reset the pool safely.
+static DB_POOL: Lazy<Mutex<Option<SqlitePool>>> = Lazy::new(|| Mutex::new(None));
 
 fn find_db_path() -> Option<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -38,23 +41,23 @@ fn find_db_path() -> Option<String> {
 }
 
 pub async fn get_db_pool() -> Result<SqlitePool, String> {
-    let pool_ref = DB_POOL
-        .get_or_try_init(|| async {
-            let db_path = find_db_path().ok_or_else(|| "Database not found. Run 'npm run scrape:requirements --popular' first.".to_string())?;
-            let db_url = format!("sqlite:{}", db_path);
-            SqlitePool::connect(&db_url)
-                .await
-                .map_err(|e| format!("Failed to connect to database: {}", e))
-        })
-        .await?;
+    // Lock the mutex and check if a pool has already been initialized.
+    let mut guard: tokio::sync::MutexGuard<'_, Option<SqlitePool>> = DB_POOL.lock().await;
+    if let Some(pool) = guard.as_ref() {
+        return Ok(pool.clone());
+    }
 
-    // Ensure schema/migrations are applied after we have a pool. This keeps the
-    // initialization simple (the closure above only creates the connection) and
-    // avoids complex type inference inside the OnceCell initializer.
-    let pool = pool_ref.clone();
+    // Not initialized yet — create a new pool and apply schema.
+    let db_path = find_db_path().ok_or_else(|| "Database not found. Run 'npm run scrape:requirements --popular' first.".to_string())?;
+    let db_url = format!("sqlite:{}", db_path);
+    let pool = SqlitePool::connect(&db_url)
+        .await
+        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+
     ensure_schema(&pool).await.map_err(|e| format!("Failed to initialize DB schema: {}", e))?;
 
-    Ok(pool_ref.clone())
+    *guard = Some(pool.clone());
+    Ok(pool)
 }
 
 /// Ensure the bundled SQL schema is applied to the database.
@@ -90,11 +93,12 @@ async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
 /// temporary database created during tests.
 #[cfg(test)]
 pub async fn set_db_pool_for_tests(pool: SqlitePool) {
-    DB_POOL.take();
-    assert!(DB_POOL.set(pool).is_ok(), "database pool was already set");
+    let mut guard = DB_POOL.lock().await;
+    *guard = Some(pool);
 }
 
 #[cfg(test)]
 pub async fn reset_db_pool() {
-    DB_POOL.take();
+    let mut guard = DB_POOL.lock().await;
+    *guard = None;
 }
