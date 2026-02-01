@@ -822,16 +822,26 @@ mod tests {
         let pool = SqlitePool::connect(&db_url).await.unwrap();
         crate::db::set_db_pool_for_tests(pool.clone()).await;
 
-        // Create games table
+        // Create games table (include full schema expected by check_game_compatibility)
         sqlx::query(
             r#"CREATE TABLE games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 steam_id INTEGER,
                 name TEXT,
                 min_cpu_cores INTEGER,
+                min_cpu_clock_ghz REAL,
+                min_cpu_text TEXT,
                 min_ram_mb INTEGER,
                 min_gpu_vram_mb INTEGER,
+                min_gpu_text TEXT,
                 min_storage_gb INTEGER,
+                rec_cpu_cores INTEGER,
+                rec_cpu_clock_ghz REAL,
+                rec_cpu_text TEXT,
+                rec_ram_mb INTEGER,
+                rec_gpu_vram_mb INTEGER,
+                rec_gpu_text TEXT,
+                rec_storage_gb INTEGER,
                 requirements_parsed INTEGER
             )"#,
         )
@@ -870,10 +880,10 @@ mod tests {
             .unwrap();
 
         let hw = HardwareProfile {
-            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
-            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
-            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
-            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd },
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream, detection: Default::default() },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd, detection: Default::default() },
             os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
             graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
         };
@@ -896,16 +906,26 @@ mod tests {
         let pool = SqlitePool::connect(&db_url).await.unwrap();
         crate::db::set_db_pool_for_tests(pool.clone()).await;
 
-        // Create games table
+        // Create games table (include full schema expected by check_game_compatibility)
         sqlx::query(
             r#"CREATE TABLE games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 steam_id INTEGER,
                 name TEXT,
                 min_cpu_cores INTEGER,
+                min_cpu_clock_ghz REAL,
+                min_cpu_text TEXT,
                 min_ram_mb INTEGER,
                 min_gpu_vram_mb INTEGER,
+                min_gpu_text TEXT,
                 min_storage_gb INTEGER,
+                rec_cpu_cores INTEGER,
+                rec_cpu_clock_ghz REAL,
+                rec_cpu_text TEXT,
+                rec_ram_mb INTEGER,
+                rec_gpu_vram_mb INTEGER,
+                rec_gpu_text TEXT,
+                rec_storage_gb INTEGER,
                 requirements_parsed INTEGER
             )"#,
         )
@@ -913,11 +933,11 @@ mod tests {
         .await
         .unwrap();
 
-        // Create proton_compatibility table
+        // Create proton_compatibility table (schema expected by check_game_compatibility)
         sqlx::query(
             r#"CREATE TABLE proton_compatibility (
-                steam_id INTEGER PRIMARY KEY,
-                tier TEXT,
+                game_id INTEGER PRIMARY KEY,
+                protondb_rating TEXT,
                 total_reports INTEGER
             )"#,
         )
@@ -934,9 +954,9 @@ mod tests {
             .await
             .unwrap();
 
-        // Insert ProtonDB rating as "borked"
-        sqlx::query("INSERT INTO proton_compatibility (steam_id, tier, total_reports) VALUES ($1, $2, $3)")
-            .bind(200i64)
+        // Insert ProtonDB rating as "borked" for the created game (game_id should be 1)
+        sqlx::query("INSERT INTO proton_compatibility (game_id, protondb_rating, total_reports) VALUES ($1, $2, $3)")
+            .bind(1i64)
             .bind("borked")
             .bind(50i32)
             .execute(&pool)
@@ -944,10 +964,10 @@ mod tests {
             .unwrap();
 
         let hw = HardwareProfile {
-            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
-            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
-            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
-            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd },
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream, detection: Default::default() },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd, detection: Default::default() },
             os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
             graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
         };

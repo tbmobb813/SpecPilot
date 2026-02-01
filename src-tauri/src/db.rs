@@ -3,12 +3,21 @@ use std::path::PathBuf;
 use std::borrow::Cow;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
-// Test helpers below use an unsafe primitive to reset the global OnceCell
-// during tests where a fresh SqlitePool is needed per-test.
+use std::collections::HashMap;
+// Shared database pools keyed by thread id. Tests may run in parallel and
+// set their own per-thread pool via `set_db_pool_for_tests`. Using a map
+// prevents races between concurrently running tests that would otherwise
+// overwrite a single global pool.
+static DB_POOLS: Lazy<Mutex<HashMap<u64, SqlitePool>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-// Shared database pool - initialized once, reused for all queries.
-// Use a mutex-wrapped Option so tests can set/reset the pool safely.
-static DB_POOL: Lazy<Mutex<Option<SqlitePool>>> = Lazy::new(|| Mutex::new(None));
+fn current_thread_key() -> u64 {
+    use std::hash::{Hash, Hasher};
+    use std::collections::hash_map::DefaultHasher;
+    let tid = std::thread::current().id();
+    let mut hasher = DefaultHasher::new();
+    tid.hash(&mut hasher);
+    hasher.finish()
+}
 
 fn find_db_path() -> Option<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -41,9 +50,15 @@ fn find_db_path() -> Option<String> {
 }
 
 pub async fn get_db_pool() -> Result<SqlitePool, String> {
-    // Lock the mutex and check if a pool has already been initialized.
-    let mut guard: tokio::sync::MutexGuard<'_, Option<SqlitePool>> = DB_POOL.lock().await;
-    if let Some(pool) = guard.as_ref() {
+    // Try to return a thread-local pool first (set during tests). Fall back
+    // to the global pool stored under key 0 if present, otherwise create one.
+    let mut guard = DB_POOLS.lock().await;
+    let tid = current_thread_key();
+    if let Some(pool) = guard.get(&tid) {
+        return Ok(pool.clone());
+    }
+    // Check global pool under key 0
+    if let Some(pool) = guard.get(&0u64) {
         return Ok(pool.clone());
     }
 
@@ -56,7 +71,8 @@ pub async fn get_db_pool() -> Result<SqlitePool, String> {
 
     ensure_schema(&pool).await.map_err(|e| format!("Failed to initialize DB schema: {}", e))?;
 
-    *guard = Some(pool.clone());
+    // Store as the global pool under key 0
+    guard.insert(0u64, pool.clone());
     Ok(pool)
 }
 
@@ -146,12 +162,14 @@ fn parse_bundled_schema_version(sql: &str) -> Option<i32> {
 /// temporary database created during tests.
 #[cfg(test)]
 pub async fn set_db_pool_for_tests(pool: SqlitePool) {
-    let mut guard = DB_POOL.lock().await;
-    *guard = Some(pool);
+    let mut guard = DB_POOLS.lock().await;
+    let tid = current_thread_key();
+    guard.insert(tid, pool);
 }
 
 #[cfg(test)]
 pub async fn reset_db_pool() {
-    let mut guard = DB_POOL.lock().await;
-    *guard = None;
+    let mut guard = DB_POOLS.lock().await;
+    let tid = current_thread_key();
+    guard.remove(&tid);
 }

@@ -28,8 +28,15 @@ pub async fn sync_protondb(app_handle: tauri::AppHandle) -> Result<String, Strin
     // - a simple relative ../ fallback
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    if let Some(app_dir) = app_handle.path_resolver().app_dir() {
-        candidates.push(PathBuf::from(app_dir));
+    // Prefer the app resource directory (bundled resources), then fall back
+    // to config/data directories which are stable and supported.
+    let resolver = app_handle.path_resolver();
+    if let Some(resource_dir) = resolver.resource_dir() {
+        candidates.push(resource_dir);
+    } else if let Some(config_dir) = resolver.app_config_dir() {
+        candidates.push(config_dir);
+    } else if let Some(data_dir) = resolver.app_data_dir() {
+        candidates.push(data_dir);
     }
 
     if let Ok(exe) = std::env::current_exe() {
