@@ -413,11 +413,11 @@ fn parse_pci_resource_vram(content: &str) -> Option<u64> {
                 u64::from_str_radix(parts[0].trim_start_matches("0x"), 16),
                 u64::from_str_radix(parts[1].trim_start_matches("0x"), 16),
             ) {
-                let size = end.saturating_sub(start);
+                // PCI resource ranges are inclusive; compute size as end - start + 1 with saturation.
+                let size = end.saturating_sub(start).saturating_add(1);
                 // Only consider sizes > 256MB as potential VRAM
                 if size > 256 * 1024 * 1024 && size > max_size {
                     max_size = size;
-                }
             }
         }
     }
