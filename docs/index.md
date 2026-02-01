@@ -3,6 +3,7 @@
 Welcome — this index links to the project's core documentation.
 
 - [Market Research](MARKET_RESEARCH.md)
+- [Roadmap: Addressing Market Gaps](ROADMAP_MARKET_GAPS.md)
 - [Quick Start Guide](QUICKSTART.md)
 - [Intelligence Layer](INTELLIGENCE_LAYER.md)
 - [Data Sources](DATA_SOURCES.md)

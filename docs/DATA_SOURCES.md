@@ -8,9 +8,10 @@ This document lists all external data sources used to bootstrap and maintain Spe
 
 ### GPU Data: TechPowerUp
 
-**URL:** https://www.techpowerup.com/gpu-specs/
+**URL:** <https://www.techpowerup.com/gpu-specs/>
 
 **What we get:**
+
 - 2000+ GPU models with full specifications
 - Memory size, bandwidth, bus width
 - Core/boost clock speeds
@@ -19,6 +20,7 @@ This document lists all external data sources used to bootstrap and maintain Spe
 - Architecture details
 
 **Scraping strategy:**
+
 ```bash
 # Example URL
 https://www.techpowerup.com/gpu-specs/geforce-rtx-3060.c3682
@@ -36,23 +38,27 @@ npm run scrape:gpus -- --start=0 --limit=100
 ### CPU Data: PassMark / UserBenchmark
 
 **PassMark:**
-- URL: https://www.cpubenchmark.net/
+
+- URL: <https://www.cpubenchmark.net/>
 - Single-thread and multi-thread scores
 - Gaming performance benchmarks
 - 1000+ CPU models
 
 **UserBenchmark:**
-- URL: https://cpu.userbenchmark.com/
+
+- URL: <https://cpu.userbenchmark.com/>
 - Real-world performance scores
 - Gaming-focused benchmarks
 
 **What we need:**
+
 - CPU model name
 - Gaming score (normalized to 0-10000)
 - Single-thread performance
 - Multi-thread performance
 
 **Scraping strategy:**
+
 ```bash
 npm run scrape:cpus -- --source=passmark
 npm run scrape:cpus -- --source=userbenchmark
@@ -67,7 +73,7 @@ npm run merge:cpu-scores  # Average both sources
 
 ### Alternative Hardware Source: GPU-Specs.com
 
-**URL:** https://www.gpu-specs.com/
+**URL:** <https://www.gpu-specs.com/>
 
 **Backup source** if TechPowerUp blocks scraping.
 
@@ -77,11 +83,12 @@ npm run merge:cpu-scores  # Average both sources
 
 ### PCGamingWiki
 
-**URL:** https://www.pcgamingwiki.com/
+**URL:** <https://www.pcgamingwiki.com/>
 
 **API:** `https://www.pcgamingwiki.com/api/appdetails.php?appid=STEAM_ID`
 
 **What we get:**
+
 ```json
 {
   "system_requirements": {
@@ -105,6 +112,7 @@ npm run merge:cpu-scores  # Average both sources
 **Data quality:** ⭐⭐⭐⭐ (Community-maintained, generally accurate)
 
 **Scraping strategy:**
+
 ```bash
 # Fetch Steam's top 1000 games first
 npm run fetch:steam-top-games
@@ -125,12 +133,14 @@ npm run normalize:game-requirements
 **URL:** `https://store.steampowered.com/api/appdetails?appids=STEAM_ID`
 
 **What we get:**
+
 - Official game system requirements (from publisher)
 - Release date
 - Genre/tags
 - Price (to prioritize popular games)
 
 **Example:**
+
 ```bash
 curl "https://store.steampowered.com/api/appdetails?appids=1091500" | jq '.["1091500"].data.pc_requirements'
 ```
@@ -147,13 +157,15 @@ curl "https://store.steampowered.com/api/appdetails?appids=1091500" | jq '.["109
 
 ### ProtonDB
 
-**URL:** https://www.protondb.com/
+**URL:** <https://www.protondb.com/>
 
 **API (Unofficial):**
+
 - Summary: `https://www.protondb.com/api/v1/reports/summaries/latest.json`
 - Game-specific: `https://www.protondb.com/api/v1/reports/summaries/{appId}.json`
 
 **What we get:**
+
 ```json
 {
   "bestReportedTier": "platinum",
@@ -166,6 +178,7 @@ curl "https://store.steampowered.com/api/appdetails?appids=1091500" | jq '.["109
 ```
 
 **User reports:**
+
 - Proton version used
 - GPU/CPU info (sometimes)
 - Performance notes
@@ -178,6 +191,7 @@ curl "https://store.steampowered.com/api/appdetails?appids=1091500" | jq '.["109
 **Update frequency:** Real-time (user-submitted)
 
 **Scraping strategy:**
+
 ```bash
 # Download full summary
 npm run sync:protondb -- --full
@@ -219,9 +233,10 @@ npm run sync:protondb -- --since=7days
 
 ### CheckMyDeck (Community Performance Data)
 
-**URL:** https://checkmydeck.ofdgn.com/
+**URL:** <https://checkmydeck.ofdgn.com/>
 
 **What we get:**
+
 - User-reported FPS for Steam Deck
 - Recommended settings per game
 - Battery life estimates
@@ -231,6 +246,7 @@ npm run sync:protondb -- --since=7days
 **Data quality:** ⭐⭐⭐⭐ (User-submitted, moderated)
 
 **Scraping strategy:**
+
 ```bash
 npm run scrape:checkmydeck
 ```
@@ -241,14 +257,16 @@ npm run scrape:checkmydeck
 
 ### PCGamingWiki Known Issues
 
-**URL:** https://www.pcgamingwiki.com/wiki/{Game_Name}
+**URL:** <https://www.pcgamingwiki.com/wiki/{Game_Name}>
 
 **What we get:**
+
 - Known crashes with specific driver versions
 - Workarounds and fixes
 - Performance issues
 
 **Example:**
+
 ```
 Game: Starfield
 Issue: Crashes on AMD Radeon driver 23.7.1
@@ -256,6 +274,7 @@ Fix: Update to 23.8.2 or later
 ```
 
 **Scraping strategy:**
+
 ```bash
 # Extract "Known issues" sections from wiki pages
 npm run scrape:driver-issues
@@ -266,17 +285,20 @@ npm run scrape:driver-issues
 ### Reddit/Forums (Manual Curation)
 
 **Sources:**
+
 - r/nvidia
 - r/AMD
 - r/linux_gaming
 - Steam Community forums
 
 **What we monitor:**
+
 - Driver update threads
 - Game-specific issue reports
 - PSAs about broken drivers
 
 **Process:**
+
 - Weekly manual review
 - Add critical issues to `driver_issues` table
 - Tag with `source: 'community'`
@@ -290,6 +312,7 @@ npm run scrape:driver-issues
 **Use case:** Convert synthetic benchmark scores to game performance tiers
 
 **Sources:**
+
 - 3DMark API (paid)
 - Unigine results database
 
@@ -300,16 +323,19 @@ npm run scrape:driver-issues
 ### YouTube Benchmark Videos
 
 **Channels:**
+
 - Digital Foundry
 - Hardware Unboxed
 - Gamers Nexus
 
 **What we get:**
+
 - Real-world game FPS data
 - Quality settings tested
 - 1% low FPS (frame stability)
 
 **Scraping strategy:**
+
 ```bash
 # Parse video descriptions for hardware specs
 # Extract FPS from charts (OCR if needed)
@@ -347,6 +373,7 @@ const RATE_LIMITS = {
 ```
 
 **Implementation:**
+
 ```bash
 # Use delays between requests
 npm run scrape:gpus -- --delay=1000  # 1 second between requests
@@ -354,7 +381,7 @@ npm run scrape:gpus -- --delay=1000  # 1 second between requests
 
 ### Respectful Scraping
 
-1. ✅ **Identify yourself:** Set User-Agent to "SpecPilot/1.0 (https://github.com/...)"
+1. ✅ **Identify yourself:** Set User-Agent to "SpecPilot/1.0 (<https://github.com/>...)"
 2. ✅ **Respect robots.txt:** Check before scraping
 3. ✅ **Cache aggressively:** Don't re-fetch unchanged data
 4. ✅ **Off-peak hours:** Run large scrapes during low-traffic times
@@ -368,6 +395,7 @@ npm run scrape:gpus -- --delay=1000  # 1 second between requests
 - ⚠️ TechPowerUp: No official API, check scraping policy
 
 **Attribution:**
+
 ```
 Data sources:
 - GPU specifications from TechPowerUp (https://www.techpowerup.com)

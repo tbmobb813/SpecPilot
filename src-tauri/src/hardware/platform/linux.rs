@@ -300,8 +300,8 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
             }
         }
         GpuVendor::AMD => {
-            // Try to read VRAM from sysfs entries created by amdgpu
-            // Example path: /sys/class/drm/card0/device/mem_info_vram_total
+            // Method 1: Try sysfs entries created by amdgpu driver
+            // Path: /sys/class/drm/card0/device/mem_info_vram_total
             if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/mem_info_vram_total") {
                 for entry in entries.filter_map(|r| r.ok()) {
                     if let Ok(vram_str) = std::fs::read_to_string(&entry) {
@@ -311,21 +311,142 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
                     }
                 }
             }
-            // Fallback to trying rocm-smi
-            let output = Command::new("rocm-smi").arg("--showmeminfo").output();
+
+            // Method 2: Try alternate sysfs path (some drivers use this)
+            if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/resource") {
+                for entry in entries.filter_map(|r| r.ok()) {
+                    if let Ok(content) = std::fs::read_to_string(&entry) {
+                        // Parse PCI BAR resources to estimate VRAM
+                        if let Some(vram) = parse_pci_resource_vram(&content) {
+                            return Ok(vram);
+                        }
+                    }
+                }
+            }
+
+            // Method 3: Try rocm-smi
+            let output = Command::new("rocm-smi").arg("--showmeminfo").arg("vram").output();
             if let Ok(output) = output {
                 let s = String::from_utf8_lossy(&output.stdout);
-                // Try to parse a number in MB from output
-                        if let Some(num) = parse_rocm_smi_output(&s) {
-                            return Ok(num);
+                if let Some(num) = parse_rocm_smi_output(&s) {
+                    return Ok(num);
+                }
+            }
+
+            // Method 4: Try amdgpu-pro-based detection via radeontop
+            let output = Command::new("radeontop").args(&["-d", "-", "-l", "1"]).output();
+            if let Ok(output) = output {
+                let s = String::from_utf8_lossy(&output.stdout);
+                if let Some(vram) = parse_radeontop_vram(&s) {
+                    return Ok(vram);
+                }
+            }
+        }
+        GpuVendor::Intel => {
+            // Intel integrated GPUs share system RAM, try to detect allocated VRAM
+            // Check i915 sysfs
+            if let Ok(entries) = glob::glob("/sys/class/drm/card*/gt/gt*/stolen_size") {
+                for entry in entries.filter_map(|r| r.ok()) {
+                    if let Ok(vram_str) = std::fs::read_to_string(&entry) {
+                        if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
+                            return Ok(vram_bytes / (1024 * 1024));
                         }
+                    }
+                }
             }
         }
         _ => {}
     }
 
-    // Fallback: Try to estimate from lspci or glxinfo
+    // Universal fallback: Try glxinfo
+    if let Some(vram) = detect_vram_from_glxinfo() {
+        return Ok(vram);
+    }
+
     Ok(0) // Unknown - will need to look up in database by model
+}
+
+/// Parse VRAM from glxinfo output (works for most GPUs)
+fn detect_vram_from_glxinfo() -> Option<u64> {
+    let output = Command::new("glxinfo").arg("-B").output().ok()?;
+    let info = String::from_utf8_lossy(&output.stdout);
+
+    // Look for "Video memory: XXXX MB" or "Dedicated video memory: XXXX MB"
+    for line in info.lines() {
+        let lower = line.to_lowercase();
+        if lower.contains("video memory") || lower.contains("dedicated memory") {
+            // Extract number followed by MB or GB
+            for word in line.split_whitespace() {
+                if let Ok(val) = word.trim_end_matches("MB").trim_end_matches("mb").parse::<u64>() {
+                    return Some(val);
+                }
+                if let Ok(val) = word.trim_end_matches("GB").trim_end_matches("gb").parse::<u64>() {
+                    return Some(val * 1024); // Convert GB to MB
+                }
+            }
+            // Try parsing just the number
+            if let Some(num_str) = line.split(':').nth(1) {
+                let num_str = num_str.trim();
+                if let Ok(val) = num_str.split_whitespace().next()?.parse::<u64>() {
+                    // Check if it says GB or MB after
+                    if num_str.to_lowercase().contains("gb") {
+                        return Some(val * 1024);
+                    }
+                    return Some(val);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Parse PCI resource file to estimate VRAM from BAR sizes
+fn parse_pci_resource_vram(content: &str) -> Option<u64> {
+    // PCI resource file format: start end flags (per line, one per BAR)
+    // VRAM is typically the largest BAR (BAR0 or BAR2)
+    let mut max_size: u64 = 0;
+
+    for line in content.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            if let (Ok(start), Ok(end)) = (
+                u64::from_str_radix(parts[0].trim_start_matches("0x"), 16),
+                u64::from_str_radix(parts[1].trim_start_matches("0x"), 16),
+            ) {
+                let size = end.saturating_sub(start);
+                // Only consider sizes > 256MB as potential VRAM
+                if size > 256 * 1024 * 1024 && size > max_size {
+                    max_size = size;
+                }
+            }
+        }
+    }
+
+    if max_size > 0 {
+        Some(max_size / (1024 * 1024)) // Bytes to MB
+    } else {
+        None
+    }
+}
+
+/// Parse radeontop output for VRAM info
+fn parse_radeontop_vram(output: &str) -> Option<u64> {
+    // radeontop shows "vram XXX.XX% XXXMB/XXXMB"
+    for line in output.lines() {
+        if line.to_lowercase().contains("vram") {
+            // Look for pattern like "8192mb" or "8192MB"
+            for word in line.split_whitespace() {
+                if word.to_lowercase().ends_with("mb") {
+                    // This might be "used/total" format, get the total (after /)
+                    if word.contains('/') {
+                        let total = word.split('/').nth(1)?;
+                        return total.trim_end_matches("MB").trim_end_matches("mb").parse().ok();
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 // Parse `rocm-smi --showmeminfo` (or similar) output for a VRAM value in MB.
