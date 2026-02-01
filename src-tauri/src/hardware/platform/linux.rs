@@ -592,7 +592,7 @@ fn test_detect_vram_unknown_uses_fallback() {
     // On systems without, it returns 0
     let v = detect_vram(&GpuVendor::Unknown).unwrap();
     // Just verify it doesn't error - value depends on system
-    assert!(v >= 0);
+    let _ = v;
 }
 
 #[test]
