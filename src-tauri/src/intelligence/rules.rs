@@ -53,14 +53,14 @@ impl VerdictEngine {
         }
 
         // CPU tier check
-        if hw.cpu.tier as u8  < req.cpu_tier_min {
+        if (hw.cpu.tier as u8) < req.cpu_tier_min {
             if let Some(b) = Bottleneck::cpu_tier_gap(&hw.cpu, req.cpu_tier_min) {
                 bottlenecks.push(b);
             }
         }
 
         // GPU tier check (simple)
-        if hw.gpu.tier as u8  < req.gpu_tier_min {
+        if (hw.gpu.tier as u8) < req.gpu_tier_min {
             bottlenecks.push(Bottleneck {
                 btype: BottleneckType::GpuTier,
                 severity: "major",

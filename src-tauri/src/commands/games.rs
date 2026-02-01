@@ -242,16 +242,16 @@ pub async fn check_game_compatibility(
             if let Some(rec_ram) = game.rec_ram_mb {
                 let rec_ram = rec_ram as i64;
                 if user_ram_mb >= rec_ram {
-                    details.push(format!("✅ RAM: {} GB (recommended: {} GB)", user_ram_mb / 1024, rec_ram / 1024));
+                    details.push(format!("✅ RAM: {} GB (recommended: {} GB)", (user_ram_mb as f32) / 1024.0, (rec_ram as f32) / 1024.0));
                 } else {
-                    details.push(format!("🟡 RAM: {} GB (minimum: {} GB, recommended: {} GB)", user_ram_mb / 1024, min_ram / 1024, rec_ram / 1024));
+                    details.push(format!("🟡 RAM: {} GB (minimum: {} GB, recommended: {} GB)", (user_ram_mb as f32) / 1024.0, (min_ram as f32) / 1024.0, (rec_ram as f32) / 1024.0));
                     meets_rec = false;
                 }
             } else {
-                details.push(format!("✅ RAM: {} GB (minimum: {} GB)", user_ram_mb / 1024, min_ram / 1024));
+                details.push(format!("✅ RAM: {} GB (minimum: {} GB)", (user_ram_mb as f32) / 1024.0, (min_ram as f32) / 1024.0));
             }
         } else {
-            details.push(format!("❌ RAM: {} GB (need {} GB minimum)", user_ram_mb / 1024, min_ram / 1024));
+            details.push(format!("❌ RAM: {} GB (need {} GB minimum)", (user_ram_mb as f32) / 1024.0, (min_ram as f32) / 1024.0));
             meets_min = false;
             meets_rec = false;
         }
@@ -265,16 +265,16 @@ pub async fn check_game_compatibility(
             if let Some(rec_vram) = game.rec_gpu_vram_mb {
                 let rec_vram = rec_vram as i64;
                 if user_vram_mb >= rec_vram {
-                    details.push(format!("✅ VRAM: {} GB (recommended: {} GB)", user_vram_mb / 1024, rec_vram / 1024));
+                    details.push(format!("✅ VRAM: {} GB (recommended: {} GB)", (user_vram_mb as f32) / 1024.0, (rec_vram as f32) / 1024.0));
                 } else {
-                    details.push(format!("🟡 VRAM: {} GB (minimum: {} GB, recommended: {} GB)", user_vram_mb / 1024, min_vram / 1024, rec_vram / 1024));
+                    details.push(format!("🟡 VRAM: {} GB (minimum: {} GB, recommended: {} GB)", (user_vram_mb as f32) / 1024.0, (min_vram as f32) / 1024.0, (rec_vram as f32) / 1024.0));
                     meets_rec = false;
                 }
             } else {
-                details.push(format!("✅ VRAM: {} GB (minimum: {} GB)", user_vram_mb / 1024, min_vram / 1024));
+                details.push(format!("✅ VRAM: {} GB (minimum: {} GB)", (user_vram_mb as f32) / 1024.0, (min_vram as f32) / 1024.0));
             }
         } else {
-            details.push(format!("❌ VRAM: {} GB (need {} GB minimum)", user_vram_mb / 1024, min_vram / 1024));
+            details.push(format!("❌ VRAM: {} GB (need {} GB minimum)", (user_vram_mb as f32) / 1024.0, (min_vram as f32) / 1024.0));
             meets_min = false;
             meets_rec = false;
         }
