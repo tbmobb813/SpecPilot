@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+// Use dynamic import for Tauri `invoke` so web/dev (Vite) environment doesn't crash
 
 export interface HardwareProfile {
   cpu: CpuInfo;
@@ -98,14 +98,31 @@ export enum GpuTier {
 export type GpuVendor = 'Nvidia' | 'AMD' | 'Intel' | 'Apple' | 'Unknown';
 export type StorageType = 'HDD' | 'SATA_SSD' | 'NVMe_SSD' | 'Unknown';
 
-export async function scanHardware(): Promise<HardwareProfile> {
-  return await invoke('scan_hardware');
+async function getInvoke(): Promise<((cmd: string, args?: any) => Promise<any>) | null> {
+  try {
+    const mod = await import('@tauri-apps/api/core');
+    const inv = (mod as any).invoke;
+    if (typeof inv === 'function') return inv as (cmd: string, args?: any) => Promise<any>;
+  } catch (e) {
+    // ignore - Tauri runtime not available in browser/dev
+  }
+  return null;
+}
+
+export async function scanHardware(): Promise<HardwareProfile | null> {
+  const inv = await getInvoke();
+  if (!inv) return null;
+  return await inv('scan_hardware');
 }
 
 export async function getCachedProfile(): Promise<HardwareProfile | null> {
-  return await invoke('get_cached_profile');
+  const inv = await getInvoke();
+  if (!inv) return null;
+  return await inv('get_cached_profile');
 }
 
 export async function saveProfile(profile: HardwareProfile): Promise<void> {
-  return await invoke('save_profile', { profile });
+  const inv = await getInvoke();
+  if (!inv) return;
+  return await inv('save_profile', { profile });
 }

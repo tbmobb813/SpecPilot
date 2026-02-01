@@ -23,6 +23,7 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
       }
     }).catch(err => {
       console.error('Failed to load cached profile:', err);
+      setError(err instanceof Error ? err.message : String(err));
     });
   }, []);
 
@@ -32,9 +33,13 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
 
     try {
       const result = await scanHardware();
-      updateProfile(result);
+      if (result) {
+        updateProfile(result);
+      } else {
+        setError('Tauri runtime not available (running in browser)');
+      }
     } catch (e) {
-      setError(e as string);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setScanning(false);
     }
