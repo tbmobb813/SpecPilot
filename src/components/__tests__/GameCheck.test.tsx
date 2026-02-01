@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
@@ -11,7 +10,7 @@ import { GameCheck } from '../GameCheck';
 
 describe('GameCheck', () => {
   beforeEach(() => {
-    (invokeTauri as unknown as jest.Mock)?.mockReset?.();
+    (invokeTauri as any).mockReset?.();
   });
 
   it('searches and displays results, and shows warning when selecting without hardware', async () => {
