@@ -493,7 +493,7 @@ pub async fn check_game_compatibility(
         (
             "below_minimum".to_string(),
             format!("Your hardware does not meet the minimum requirements for {}", game.name),
-            if checks_performed >= 2 { 0.2 } else { 0.35 },
+            if checks_performed >= 2 { 0.35 } else { 0.2 },
         )
     } else if !meets_rec {
         (
