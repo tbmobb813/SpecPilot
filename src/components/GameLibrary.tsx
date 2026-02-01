@@ -133,7 +133,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       setAvailableGenres(Array.from(genres).sort());
 
     } catch (e) {
-      setError(e as string);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
       setLoadingProgress(null);
