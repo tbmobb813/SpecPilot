@@ -51,10 +51,11 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const [genreFilter, setGenreFilter] = useState<string>('all');
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
 
-  // Load all games on mount
+  // Load all games on mount and whenever `hardwareProfile` changes so
+  // compatibility verdicts are computed for the current hardware.
   useEffect(() => {
     loadGames();
-  }, []);
+  }, [hardwareProfile]);
 
   const loadGames = async () => {
     setLoading(true);
@@ -188,10 +189,12 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     setFilteredGames(filtered);
   }, [games, searchQuery, verdictFilter, genreFilter, hardwareProfile]);
 
-  // Call applyFilters whenever inputs change
+  // Call applyFilters whenever inputs or the callback identity change.
+  // `applyFilters` depends on `hardwareProfile`, so include it indirectly
+  // by depending on the stable `applyFilters` reference.
   useEffect(() => {
     applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter]);
+  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
 
   const checkGameCompatibility = async (game: GameResult) => {
     if (!hardwareProfile) {
