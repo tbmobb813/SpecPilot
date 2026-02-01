@@ -21,6 +21,7 @@ npm run tauri dev
 **Expected result:** App window opens, you can click "Scan My PC" and see your hardware.
 
 **If it fails:**
+
 - Check [QUICKSTART.md](QUICKSTART.md) troubleshooting section
 - Verify Rust and Node.js are installed
 - Check that all system tools are available (lspci, nvidia-smi, etc.)
@@ -30,6 +31,7 @@ npm run tauri dev
 ### 2. Verify Hardware Detection
 
 **Test checklist:**
+
 - [ ] CPU detected correctly
 - [ ] GPU detected correctly
 - [ ] RAM amount correct
@@ -39,6 +41,7 @@ npm run tauri dev
 - [ ] Tier classification makes sense
 
 **Known issues to expect:**
+
 - ⚠️ AMD GPU VRAM shows 0 MB (not implemented yet)
 - ⚠️ DirectX shows placeholder on Windows (needs proper detection)
 - ⚠️ Some tier classifications may be off (needs database refinement)
@@ -48,11 +51,13 @@ npm run tauri dev
 ### 3. Read Core Documentation
 
 **Priority order:**
+
 1. [QUICKSTART.md](QUICKSTART.md) - 10 minutes
 2. [INTELLIGENCE_LAYER.md](INTELLIGENCE_LAYER.md) - 30 minutes (skim, come back to details)
 3. [DATA_SOURCES.md](DATA_SOURCES.md) - 15 minutes (reference)
 
 **Key takeaways:**
+
 - Understand the hybrid tier + score system
 - Know where data comes from (ProtonDB, TechPowerUp, etc.)
 - Grasp the MVP → scale strategy
@@ -66,6 +71,7 @@ npm run tauri dev
 **File to edit:** `src-tauri/src/hardware/platform/linux.rs`
 
 **Current code:**
+
 ```rust
 fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
     match vendor {
@@ -79,6 +85,7 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
 ```
 
 **Solution:**
+
 ```rust
 GpuVendor::AMD => {
     // Parse sysfs
@@ -96,6 +103,7 @@ GpuVendor::AMD => {
 ```
 
 **Test:**
+
 ```bash
 # On AMD system
 npm run tauri dev
@@ -104,6 +112,7 @@ npm run tauri dev
 ```
 
 **Dependencies to add to Cargo.toml:**
+
 ```toml
 [dependencies]
 glob = "0.3"
@@ -147,6 +156,7 @@ mod tests {
 ```
 
 **Run tests:**
+
 ```bash
 cd src-tauri
 cargo test
@@ -159,6 +169,7 @@ cargo test
 **File to edit:** `src-tauri/src/hardware/platform/linux.rs`
 
 **Add function:**
+
 ```rust
 pub fn detect_opengl() -> Result<Option<OpenGLSupport>> {
     let output = Command::new("glxinfo")
@@ -184,6 +195,7 @@ pub fn detect_opengl() -> Result<Option<OpenGLSupport>> {
 ```
 
 **Update mod.rs:**
+
 ```rust
 pub fn scan_system() -> Result<HardwareProfile> {
     // ... existing code ...
@@ -209,6 +221,7 @@ pub fn scan_system() -> Result<HardwareProfile> {
 Copy schema from [INTELLIGENCE_LAYER.md](INTELLIGENCE_LAYER.md) section "Database Schema".
 
 **Initialize:**
+
 ```bash
 npm run intelligence:init
 # Creates intelligence.db with empty tables
@@ -219,12 +232,14 @@ npm run intelligence:init
 ### Step 2: Build Scrapers
 
 **Create directory structure:**
+
 ```bash
 mkdir -p scripts/scrapers
 cd scripts/scrapers
 ```
 
 **GPU Scraper** (`scripts/scrapers/techpowerup.ts`):
+
 ```typescript
 import axios from 'axios';
 import * as cheerio from 'cheerio';
@@ -261,6 +276,7 @@ function calculateTier(specs: any): number {
 ```
 
 **Run scraper:**
+
 ```bash
 npm run scrape:gpus -- --limit=100  # Test with 100 first
 npm run scrape:gpus -- --full       # Full scrape (2000+)
@@ -293,6 +309,7 @@ async function syncProtonDB() {
 ```
 
 **Run sync:**
+
 ```bash
 npm run sync:protondb
 ```
@@ -343,6 +360,7 @@ pub fn evaluate_verdict(
 ```
 
 **Test:**
+
 ```bash
 cd src-tauri
 cargo test intelligence::rules
@@ -381,11 +399,13 @@ cargo test intelligence::rules
 ```
 
 **Import:**
+
 ```bash
 npm run games:import -- --file=data/games-top-100.json
 ```
 
 **Recommended games to start with:**
+
 1. Cyberpunk 2077
 2. Baldur's Gate 3
 3. Elden Ring
@@ -408,6 +428,7 @@ npm run games:import -- --file=data/games-top-100.json
 ### Step 1: Launch Telemetry
 
 **Add to frontend** (`src/components/TelemetrySettings.tsx`):
+
 ```typescript
 export function TelemetrySettings() {
   const [enabled, setEnabled] = useState(false);
@@ -446,6 +467,7 @@ export function TelemetrySettings() {
 ### Step 2: Collect User Reports
 
 **After game compatibility check:**
+
 ```typescript
 async function submitPerformanceReport(
   game: string,
@@ -476,12 +498,14 @@ async function submitPerformanceReport(
 ### Step 3: Analyze & Calibrate
 
 **Weekly job:**
+
 ```bash
 npm run jobs:analyze-telemetry
 npm run jobs:calibrate-tiers
 ```
 
 **What it does:**
+
 1. Aggregate user reports by hardware tier
 2. Calculate average FPS per tier
 3. Identify misclassified hardware
@@ -521,12 +545,14 @@ interface Metrics {
 ## 🏆 Milestones
 
 ### Milestone 1: MVP Complete (Week 4)
+
 - [ ] 100 games with requirements
 - [ ] Rules engine working
 - [ ] Basic UI for game checking
 - [ ] Accuracy: 80%+
 
 ### Milestone 2: Beta Launch (Week 8)
+
 - [ ] 500 games covered
 - [ ] Telemetry collecting
 - [ ] ProtonDB integrated
@@ -534,6 +560,7 @@ interface Metrics {
 - [ ] Soft launch on r/linux_gaming
 
 ### Milestone 3: Public Launch (Week 12)
+
 - [ ] 1000+ games covered
 - [ ] Steam Deck optimizations
 - [ ] 5,000+ user reports
@@ -541,6 +568,7 @@ interface Metrics {
 - [ ] Featured on r/SteamDeck
 
 ### Milestone 4: Market Leader (Month 6)
+
 - [ ] 5000+ games
 - [ ] 50,000+ scans performed
 - [ ] #1 for "Steam Deck game checker"
@@ -551,18 +579,21 @@ interface Metrics {
 ## 🔄 Daily Workflow
 
 ### Morning (1 hour)
+
 1. Check telemetry dashboard - any anomalies?
 2. Review user reports from yesterday
 3. Triage GitHub issues
 4. Update roadmap if needed
 
 ### Development (4-6 hours)
+
 1. Pick highest priority task from this document
 2. Write code
 3. Write tests
 4. Commit with clear message
 
 ### Evening (30 mins)
+
 1. Run full test suite
 2. Update progress tracking
 3. Document any blockers
@@ -601,22 +632,26 @@ npm run db:backup              # Backup database
 ## 🆘 Getting Stuck?
 
 ### If Hardware Detection Fails
+
 1. Check [QUICKSTART.md](QUICKSTART.md) troubleshooting
 2. Verify system tools are installed (lspci, etc.)
 3. Check logs: `tail -f ~/.specpilot/logs/app.log`
 
 ### If Scraping Fails
+
 1. Check rate limits in [DATA_SOURCES.md](DATA_SOURCES.md)
 2. Verify site hasn't changed structure
 3. Check internet connection
 4. Try manual fetch: `curl -I https://techpowerup.com`
 
 ### If Tests Fail
+
 1. Run with verbose output: `cargo test -- --nocapture`
 2. Check database is initialized: `sqlite3 intelligence.db .tables`
 3. Clear cache: `cargo clean && npm run tauri dev`
 
 ### If Nothing Works
+
 1. Check all dependencies are installed
 2. Try on a fresh directory
 3. Open an issue with logs attached
@@ -628,16 +663,19 @@ npm run db:backup              # Backup database
 As you build, reference these:
 
 **Rust:**
+
 - [The Rust Book](https://doc.rust-lang.org/book/)
 - [Tauri Docs](https://tauri.app/v1/guides/)
 - [sqlx Documentation](https://docs.rs/sqlx/latest/sqlx/)
 
 **Web Scraping:**
+
 - [cheerio](https://cheerio.js.org/)
 - [axios](https://axios-http.com/)
 - Respect robots.txt and rate limits
 
 **Gaming APIs:**
+
 - [ProtonDB API](https://www.protondb.com/api/v1/)
 - [Steam Web API](https://steamcommunity.com/dev)
 - [PCGamingWiki](https://www.pcgamingwiki.com/)

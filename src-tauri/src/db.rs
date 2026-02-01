@@ -1,10 +1,9 @@
 use sqlx::sqlite::SqlitePool;
 use std::path::PathBuf;
-use std::sync::OnceLock;
-use tokio::sync::Mutex;
+use tokio::sync::OnceCell;
 
 // Shared database pool - initialized once, reused for all queries
-static DB_POOL: OnceLock<Mutex<Option<SqlitePool>>> = OnceLock::new();
+static DB_POOL: OnceCell<SqlitePool> = OnceCell::const_new();
 
 fn find_db_path() -> Option<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -36,22 +35,29 @@ fn find_db_path() -> Option<String> {
 }
 
 pub async fn get_db_pool() -> Result<SqlitePool, String> {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
+    let pool_ref = DB_POOL
+        .get_or_try_init(async {
+            let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
+            let db_url = format!("sqlite:{}", db_path);
+            SqlitePool::connect(&db_url)
+                .await
+                .map_err(|e| format!("Failed to connect to database: {}", e))
+        })
+        .await?;
 
-    if let Some(pool) = guard.as_ref() {
-        return Ok(pool.clone());
-    }
+    Ok(pool_ref.clone())
+}
+    let pool_ref = DB_POOL
+        .get_or_try_init(async {
+            let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
+            let db_url = format!("sqlite:{}", db_path);
+            SqlitePool::connect(&db_url)
+                .await
+                .map_err(|e| format!("Failed to connect to database: {}", e))
+        })
+        .await?;
 
-    let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
-    let db_url = format!("sqlite:{}", db_path);
-
-    let pool = SqlitePool::connect(&db_url)
-        .await
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
-
-    *guard = Some(pool.clone());
-    Ok(pool)
+    Ok(pool_ref.clone())
 }
 
 /// Test helper: set the global DB pool to a provided `SqlitePool`.
@@ -59,14 +65,11 @@ pub async fn get_db_pool() -> Result<SqlitePool, String> {
 /// temporary database created during tests.
 #[cfg(test)]
 pub async fn set_db_pool_for_tests(pool: SqlitePool) {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
-    *guard = Some(pool);
+    DB_POOL.take();
+    assert!(DB_POOL.set(pool).is_ok(), "database pool was already set");
 }
 
 #[cfg(test)]
 pub async fn reset_db_pool() {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
-    *guard = None;
+    DB_POOL.take();
 }

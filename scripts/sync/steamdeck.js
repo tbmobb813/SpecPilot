@@ -103,6 +103,16 @@ async function fetchDeckStatus(appId, retryCount = 0) {
       await sleep(backoffMs);
       return fetchDeckStatus(appId, retryCount + 1);
     }
+    
+    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+      if (retryCount < MAX_RETRIES) {
+        const backoffMs = Math.min(BASE_BACKOFF_MS * Math.pow(2, retryCount), MAX_BACKOFF_MS);
+        console.warn(`Timeout on app ${appId}, retry ${retryCount + 1}/${MAX_RETRIES} after ${backoffMs / 1000}s...`);
+        await sleep(backoffMs);
+        return fetchDeckStatus(appId, retryCount + 1);
+      }
+    }
+    
     return null;
   }
 }

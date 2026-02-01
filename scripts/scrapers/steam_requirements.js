@@ -561,15 +561,16 @@ async function main() {
     // Ensure new columns exist (migration)
     function addColumnIfNotExists(db, sql) {
       try {
-        db.exec(sql);
+      db.exec(sql);
       } catch (e) {
-        const message = e && e.message ? String(e.message) : '';
-        // Swallow only "column already exists" type errors; surface everything else.
-        if (!/duplicate column name|already exists/i.test(message)) {
-          console.error('Failed to apply schema migration for SQL:', sql);
-          console.error(e);
-          throw e;
-        }
+      const message = e && e.message ? String(e.message) : '';
+      // Only ignore "duplicate column" errors from SQLite
+      if (!/duplicate column name/i.test(message)) {
+        console.error('Failed to apply schema migration:', sql);
+        console.error('Error:', message);
+        throw e;
+      }
+      // Silently ignore duplicate column errors
       }
     }
 
