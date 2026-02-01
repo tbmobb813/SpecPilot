@@ -87,7 +87,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       // 4) Reduce default batch size via `VITE_GAME_CHECK_BATCH_SIZE` for low-power devices.
       if (hardwareProfile) {
         // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`, fallback to 20
-        const envSize = Number((import.meta as any).env?.VITE_GAME_CHECK_BATCH_SIZE);
+        const rawBatchSize = import.meta?.env?.VITE_GAME_CHECK_BATCH_SIZE;
+        const envSize = typeof rawBatchSize === 'string' ? Number(rawBatchSize) : NaN;
         const BATCH_SIZE = Number.isFinite(envSize) && envSize > 0 ? envSize : 20;
 
         // Show games immediately without verdicts, then update progressively
