@@ -1,10 +1,14 @@
 use sqlx::sqlite::SqlitePool;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::borrow::Cow;
+use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
+// Test helpers below use an unsafe primitive to reset the global OnceCell
+// during tests where a fresh SqlitePool is needed per-test.
 
-// Shared database pool - initialized once, reused for all queries
-static DB_POOL: OnceLock<Mutex<Option<SqlitePool>>> = OnceLock::new();
+// Shared database pool - initialized once, reused for all queries.
+// Use a mutex-wrapped Option so tests can set/reset the pool safely.
+static DB_POOL: Lazy<Mutex<Option<SqlitePool>>> = Lazy::new(|| Mutex::new(None));
 
 fn find_db_path() -> Option<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -16,6 +20,7 @@ fn find_db_path() -> Option<String> {
             candidates.push(parent.join("resources").join("intelligence.db"));
             candidates.push(parent.join("..").join("share").join("specpilot").join("intelligence.db"));
         }
+
     }
 
     // Fallbacks for development layouts
@@ -36,22 +41,104 @@ fn find_db_path() -> Option<String> {
 }
 
 pub async fn get_db_pool() -> Result<SqlitePool, String> {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
-
+    // Lock the mutex and check if a pool has already been initialized.
+    let mut guard: tokio::sync::MutexGuard<'_, Option<SqlitePool>> = DB_POOL.lock().await;
     if let Some(pool) = guard.as_ref() {
         return Ok(pool.clone());
     }
 
-    let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
+    // Not initialized yet — create a new pool and apply schema.
+    let db_path = find_db_path().ok_or_else(|| "Database not found. Run 'npm run scrape:requirements --popular' first.".to_string())?;
     let db_url = format!("sqlite:{}", db_path);
-
     let pool = SqlitePool::connect(&db_url)
         .await
         .map_err(|e| format!("Failed to connect to database: {}", e))?;
 
+    ensure_schema(&pool).await.map_err(|e| format!("Failed to initialize DB schema: {}", e))?;
+
     *guard = Some(pool.clone());
     Ok(pool)
+}
+
+/// Ensure the bundled SQL schema is applied to the database.
+/// This runs each statement from `database/schema.sql` in order and ignores
+/// empty statements. It's safe to run multiple times because the schema
+/// file uses `CREATE TABLE IF NOT EXISTS` and idempotent statements.
+async fn ensure_schema(pool: &SqlitePool) -> Result<(), String> {
+    // Include the schema at compile time so it is available in packaged apps.
+    // Path is relative to this file: `src/database/schema.sql`.
+    let sql: Cow<'static, str> = Cow::from(include_str!("database/schema.sql"));
+
+    // Parse bundled schema version (INSERT in the schema.sql uses the meta table)
+    let bundled_version = parse_bundled_schema_version(&sql).unwrap_or(1);
+
+    // Check current DB schema version. If meta table or entry doesn't exist,
+    // treat current version as 0 to force applying the schema.
+    let current_version: i32 = match sqlx::query_scalar::<_, String>("SELECT value FROM meta WHERE key = 'schema_version'")
+        .fetch_optional(pool)
+        .await
+    {
+        Ok(Some(v)) => v.parse().unwrap_or(0),
+        Ok(None) => 0,
+        Err(_) => 0,
+    };
+
+    if current_version >= bundled_version {
+        // Nothing to do
+        return Ok(());
+    }
+
+    // Apply statements (idempotent schema). Wrap in a transaction for safety.
+    if let Err(e) = sqlx::query("BEGIN").execute(pool).await {
+        return Err(format!("Failed to begin transaction for schema migration: {}", e));
+    }
+
+    for stmt in sql.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let statement = stmt.to_string();
+        if statement.is_empty() {
+            continue;
+        }
+
+        if let Err(e) = sqlx::query(&statement).execute(pool).await {
+            // Attempt to rollback
+            let _ = sqlx::query("ROLLBACK").execute(pool).await;
+            return Err(format!("Failed to apply DB schema statement: {}: {}", statement, e));
+        }
+    }
+
+    // Update schema_version in meta table to bundled_version.
+    if let Err(e) = sqlx::query("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)")
+        .bind(bundled_version.to_string())
+        .execute(pool)
+        .await
+    {
+        let _ = sqlx::query("ROLLBACK").execute(pool).await;
+        return Err(format!("Failed to update schema_version: {}", e));
+    }
+
+    if let Err(e) = sqlx::query("COMMIT").execute(pool).await {
+        return Err(format!("Failed to commit schema migration: {}", e));
+    }
+
+    Ok(())
+}
+
+fn parse_bundled_schema_version(sql: &str) -> Option<i32> {
+    // Look for the line that inserts schema_version, e.g.
+    // INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version','2');
+    let pattern = "VALUES ('schema_version','";
+    if let Some(pos) = sql.find(pattern) {
+        let start = pos + pattern.len();
+        if let Some(end) = sql[start..].find("')") {
+            let ver_str = &sql[start..start + end];
+            return ver_str.parse().ok();
+        }
+        if let Some(end) = sql[start..].find("');") {
+            let ver_str = &sql[start..start + end];
+            return ver_str.parse().ok();
+        }
+    }
+    None
 }
 
 /// Test helper: set the global DB pool to a provided `SqlitePool`.
@@ -59,14 +146,12 @@ pub async fn get_db_pool() -> Result<SqlitePool, String> {
 /// temporary database created during tests.
 #[cfg(test)]
 pub async fn set_db_pool_for_tests(pool: SqlitePool) {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
+    let mut guard = DB_POOL.lock().await;
     *guard = Some(pool);
 }
 
 #[cfg(test)]
 pub async fn reset_db_pool() {
-    let mutex = DB_POOL.get_or_init(|| Mutex::new(None));
-    let mut guard = mutex.lock().await;
+    let mut guard = DB_POOL.lock().await;
     *guard = None;
 }

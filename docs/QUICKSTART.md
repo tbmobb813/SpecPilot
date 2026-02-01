@@ -13,6 +13,7 @@ Before you begin, ensure you have:
 ### Platform-Specific Requirements
 
 **Linux:**
+
 ```bash
 # Ubuntu/Debian
 sudo apt install lshw lspci lscpu pciutils
@@ -28,9 +29,11 @@ sudo apt install mesa-utils
 ```
 
 **Windows:**
+
 - No additional requirements (uses built-in WMI)
 
 **macOS:**
+
 - Not yet implemented (coming soon)
 
 ---
@@ -50,6 +53,7 @@ npm install
 ```
 
 This will install:
+
 - React and React DOM
 - Tauri API bindings
 - Vite (build tool)
@@ -63,6 +67,7 @@ cargo --version
 ```
 
 You should see version numbers like:
+
 ```
 rustc 1.75.0 (82e1608df 2023-12-21)
 cargo 1.75.0 (1d8b05cdd 2023-11-20)
@@ -79,6 +84,7 @@ npm run tauri dev
 ```
 
 This will:
+
 1. Start Vite dev server on port 3000
 2. Compile Rust backend
 3. Launch the Tauri application window
@@ -93,6 +99,7 @@ npm run tauri build
 ```
 
 This creates a production-ready executable in:
+
 - **Linux:** `src-tauri/target/release/bundle/appimage/specpilot_0.1.0_amd64.AppImage`
 - **Windows:** `src-tauri/target/release/bundle/msi/SpecPilot_0.1.0_x64_en-US.msi`
 
@@ -145,6 +152,7 @@ After 0.5-1 second, you'll see:
 ### Issue: Build fails with "command not found: tauri"
 
 **Solution:**
+
 ```bash
 npm install -g @tauri-apps/cli
 ```
@@ -152,6 +160,7 @@ npm install -g @tauri-apps/cli
 ### Issue: "Failed to detect GPU" on Linux
 
 **Solution:**
+
 ```bash
 # Check if lspci is installed
 which lspci
@@ -166,6 +175,7 @@ lspci | grep -i vga
 ### Issue: NVIDIA GPU shows 0 MB VRAM on Linux
 
 **Solution:**
+
 ```bash
 # Check if nvidia-smi is installed
 which nvidia-smi
@@ -180,6 +190,7 @@ nvidia-smi
 ### Issue: Build fails with "linker `cc` not found"
 
 **Solution:**
+
 ```bash
 # Ubuntu/Debian
 sudo apt install build-essential
@@ -194,6 +205,7 @@ sudo pacman -S base-devel
 ### Issue: "error: failed to compile `specpilot`"
 
 **Solution:**
+
 ```bash
 # Update Rust
 rustup update
@@ -209,6 +221,7 @@ cargo build
 ### Issue: Frontend shows blank white screen
 
 **Solution:**
+
 ```bash
 # Check console for errors
 # Open DevTools: Right-click → Inspect
@@ -263,6 +276,7 @@ SpecPilot/
 **Example: Add motherboard detection**
 
 1. **Add to common types** (`src-tauri/src/hardware/common.rs`):
+
 ```rust
 pub struct MotherboardInfo {
     pub manufacturer: String,
@@ -271,7 +285,8 @@ pub struct MotherboardInfo {
 }
 ```
 
-2. **Implement detection** (`src-tauri/src/hardware/platform/linux.rs`):
+1. **Implement detection** (`src-tauri/src/hardware/platform/linux.rs`):
+
 ```rust
 pub fn detect_motherboard() -> Result<MotherboardInfo> {
     let output = Command::new("dmidecode")
@@ -284,7 +299,8 @@ pub fn detect_motherboard() -> Result<MotherboardInfo> {
 }
 ```
 
-3. **Update frontend types** (`src/api/hardware.ts`):
+1. **Update frontend types** (`src/api/hardware.ts`):
+
 ```typescript
 export interface MotherboardInfo {
   manufacturer: string;
@@ -293,7 +309,8 @@ export interface MotherboardInfo {
 }
 ```
 
-4. **Display in UI** (`src/components/HardwareScan.tsx`):
+1. **Display in UI** (`src/components/HardwareScan.tsx`):
+
 ```tsx
 <div className="section motherboard-section">
   <h3>🔧 Motherboard</h3>
@@ -367,9 +384,9 @@ After getting the app running, check out:
 
 ### Common Resources
 
-- **Tauri Documentation:** https://tauri.app/
-- **Rust Book:** https://doc.rust-lang.org/book/
-- **React Docs:** https://react.dev/
+- **Tauri Documentation:** <https://tauri.app/>
+- **Rust Book:** <https://doc.rust-lang.org/book/>
+- **React Docs:** <https://react.dev/>
 
 ### Debug Mode
 

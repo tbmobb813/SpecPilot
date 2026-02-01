@@ -29,6 +29,7 @@ Frontend (TypeScript):
 ```
 
 **Why this is good:**
+
 - Easy to add new platforms (just add `platform/macos.rs`)
 - Clear separation between detection logic and UI
 - Platform-specific code is isolated and doesn't pollute common code
@@ -36,16 +37,19 @@ Frontend (TypeScript):
 ### 2. **Type Safety End-to-End**
 
 **Rust backend:**
+
 - Strong typing with `enum` for GPU vendors, storage types, tiers
 - Custom error types with `thiserror` for descriptive errors
 - `Result<T>` type for proper error propagation
 
 **TypeScript frontend:**
+
 - Interfaces match Rust structs exactly (auto-serializable with `serde`)
 - Enums and types prevent invalid states
 - Tauri API calls are type-safe
 
 **Example:**
+
 ```rust
 // Backend
 pub enum CpuTier {
@@ -74,6 +78,7 @@ Each platform uses native tools for accurate detection:
 | macOS    | Planned (can use `system_profiler`, `ioreg`)    |
 
 **Why this is good:**
+
 - No guessing or estimation - uses real system APIs
 - Leverages existing system utilities (no need to reinvent the wheel)
 - Falls back gracefully when tools are unavailable
@@ -117,6 +122,7 @@ pub enum HardwareError {
 ### 6. **Responsive UI Design**
 
 The frontend features:
+
 - **Gradient design** (purple theme) for modern aesthetics
 - **Grid layout** that adapts to different screen sizes
 - **Clear information hierarchy** with sections for each hardware component
@@ -130,6 +136,7 @@ The frontend features:
 ### 1. **Enhanced GPU VRAM Detection (Linux)**
 
 **Current issue:**
+
 ```rust
 fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
     match vendor {
@@ -146,11 +153,13 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
 ```
 
 **Recommended fix:**
+
 - For AMD: Parse `/sys/class/drm/card*/device/mem_info_vram_total`
 - For Intel: Use `glxinfo` or Intel GPU tools
 - Fallback: Query Vulkan for memory info
 
 **Implementation:**
+
 ```rust
 GpuVendor::AMD => {
     // Try sysfs first
@@ -169,6 +178,7 @@ GpuVendor::AMD => {
 ### 2. **Database-Driven Hardware Classification**
 
 **Current approach:**
+
 - String matching in code (e.g., `model_lower.contains("4090")`)
 - Requires code changes to add new GPUs/CPUs
 - Can't handle edge cases (e.g., mobile vs desktop variants)
@@ -202,12 +212,14 @@ CREATE TABLE cpus (
 ```
 
 **Benefits:**
+
 - Easy to update (just add database entries)
 - Can match by PCI ID (more accurate than string matching)
 - Can store additional metadata (TDP, release year, benchmarks)
 - Can integrate with online databases (e.g., TechPowerUp GPU database)
 
 **Implementation:**
+
 ```rust
 // src-tauri/src/database/hardware_db.rs
 use sqlx::SqlitePool;
@@ -238,6 +250,7 @@ pub async fn lookup_gpu(model: &str, pci_id: Option<&str>) -> Result<GpuTier> {
 ### 3. **Caching and State Management**
 
 **Current issue:**
+
 - Scans are not persisted across app restarts
 - No background scanning
 - No diff detection (can't tell what changed since last scan)
@@ -245,6 +258,7 @@ pub async fn lookup_gpu(model: &str, pci_id: Option<&str>) -> Result<GpuTier> {
 **Recommended improvements:**
 
 **a) Persistent cache (SQLite):**
+
 ```rust
 pub struct HardwareScan {
     pub id: i32,
@@ -264,6 +278,7 @@ pub async fn save_scan(profile: &HardwareProfile) -> Result<()> {
 ```
 
 **b) Background scanning:**
+
 ```rust
 // Scan every hour in background
 tokio::spawn(async move {
@@ -278,6 +293,7 @@ tokio::spawn(async move {
 ```
 
 **c) Change detection:**
+
 ```rust
 pub fn diff_profiles(old: &HardwareProfile, new: &HardwareProfile) -> Vec<HardwareChange> {
     let mut changes = vec![];
@@ -298,6 +314,7 @@ pub fn diff_profiles(old: &HardwareProfile, new: &HardwareProfile) -> Vec<Hardwa
 ### 4. **Testing Infrastructure**
 
 **Currently missing:**
+
 - Unit tests for tier classification
 - Integration tests for platform detection
 - Mock system utilities for testing
@@ -337,6 +354,7 @@ async fn test_cpu_detection() {
 ```
 
 **Mocking system commands:**
+
 ```rust
 // tests/mocks/lspci.rs
 pub fn mock_lspci_output() -> &'static str {
@@ -354,6 +372,7 @@ fn test_parse_gpu_from_lspci() {
 ### 5. **Graphics API Detection (Linux)**
 
 **Current Vulkan detection:**
+
 - Requires `vulkaninfo` to be installed
 - Doesn't detect OpenGL support
 - No Mesa driver info
@@ -361,6 +380,7 @@ fn test_parse_gpu_from_lspci() {
 **Recommended improvements:**
 
 **a) OpenGL detection:**
+
 ```rust
 pub fn detect_opengl() -> Result<Option<OpenGLSupport>> {
     let output = Command::new("glxinfo")
@@ -381,6 +401,7 @@ pub fn detect_opengl() -> Result<Option<OpenGLSupport>> {
 ```
 
 **b) Mesa driver detection (important for AMD/Intel):**
+
 ```rust
 pub fn detect_mesa_version() -> Option<String> {
     let output = Command::new("glxinfo")
@@ -405,11 +426,13 @@ pub fn detect_mesa_version() -> Option<String> {
 ### 6. **Windows DirectX Detection**
 
 **Current implementation:**
+
 - Hardcoded DirectX 12.0 (placeholder)
 - Doesn't check actual feature levels
 - No ray tracing capability detection
 
 **Recommended fix:**
+
 ```rust
 use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Direct3D12::*;
@@ -459,6 +482,7 @@ pub fn detect_directx() -> Result<Option<DirectXSupport>> {
 ### 7. **Error Handling in Frontend**
 
 **Current approach:**
+
 - Shows error as string in red banner
 - No retry mechanism
 - No detailed error information
@@ -466,6 +490,7 @@ pub fn detect_directx() -> Result<Option<DirectXSupport>> {
 **Recommended improvements:**
 
 **a) Structured error types:**
+
 ```typescript
 interface ScanError {
   code: string;
@@ -489,6 +514,7 @@ async function scanHardware(): Promise<HardwareProfile | ScanError> {
 ```
 
 **b) Retry mechanism:**
+
 ```typescript
 const handleScan = async () => {
   setScanning(true);
@@ -519,6 +545,7 @@ const handleScan = async () => {
 ### 8. **Performance Optimization**
 
 **Current issues:**
+
 - All detection happens synchronously
 - No progress indication for long scans
 - Frontend blocks during scan
@@ -526,6 +553,7 @@ const handleScan = async () => {
 **Recommended improvements:**
 
 **a) Async detection with progress:**
+
 ```rust
 #[tauri::command]
 pub async fn scan_hardware_with_progress(
@@ -550,6 +578,7 @@ pub async fn scan_hardware_with_progress(
 ```
 
 **b) Frontend progress bar:**
+
 ```typescript
 useEffect(() => {
   const unlisten = listen('scan_progress', (event: { payload: ScanProgress }) => {
@@ -567,30 +596,35 @@ useEffect(() => {
 ## 🚀 Next Steps & Feature Roadmap
 
 ### Phase 1: Core Improvements (Week 1-2)
+
 - [ ] Implement AMD GPU VRAM detection
 - [ ] Add comprehensive unit tests
 - [ ] Fix Windows DirectX detection
 - [ ] Add OpenGL detection for Linux
 
 ### Phase 2: Database Integration (Week 3-4)
+
 - [ ] Design SQLite schema for hardware database
 - [ ] Populate initial database with GPU/CPU data
 - [ ] Implement database lookups in detection logic
 - [ ] Add PCI ID matching for GPUs
 
 ### Phase 3: Caching & State (Week 5-6)
+
 - [ ] Implement persistent scan history
 - [ ] Add background scanning
 - [ ] Build change detection system
 - [ ] Create timeline view of hardware changes
 
 ### Phase 4: Enhanced Features (Week 7-8)
+
 - [ ] Proton compatibility integration
 - [ ] Game requirements checking
 - [ ] System benchmarking
 - [ ] Export reports (JSON/PDF)
 
 ### Phase 5: Polish (Week 9-10)
+
 - [ ] macOS support
 - [ ] Localization (i18n)
 - [ ] Dark/light theme toggle
@@ -603,16 +637,19 @@ useEffect(() => {
 ### Current Security Posture
 
 **✅ Good:**
+
 - No network calls (all detection is local)
 - No sensitive data collection
 - No authentication needed (standalone app)
 
 **⚠️ Considerations:**
+
 - Reading system info requires permissions (e.g., `dmidecode` needs sudo on Linux)
 - WMI queries on Windows might require elevation
 - PCI device enumeration could expose hardware serial numbers
 
 **Recommendations:**
+
 1. **Never collect personally identifiable information (PII)**
    - Don't store hardware serial numbers
    - Don't transmit data to external servers without consent
@@ -663,6 +700,7 @@ useEffect(() => {
 ### Documentation Improvements Needed
 
 1. **Add rustdoc comments:**
+
 ```rust
 /// Detects CPU information for the current system.
 ///
@@ -683,7 +721,8 @@ useEffect(() => {
 pub fn detect_cpu() -> Result<CpuInfo> { /* ... */ }
 ```
 
-2. **Add TypeScript JSDoc:**
+1. **Add TypeScript JSDoc:**
+
 ```typescript
 /**
  * Scans the system hardware and returns a complete profile.
@@ -710,6 +749,7 @@ export async function scanHardware(): Promise<HardwareProfile> {
 ## 🎯 Summary
 
 ### What's Working Well
+
 ✅ Clean architecture with strong separation of concerns
 ✅ Type-safe end-to-end (Rust → TypeScript)
 ✅ Platform-specific implementations that use native tools
@@ -717,6 +757,7 @@ export async function scanHardware(): Promise<HardwareProfile> {
 ✅ Modern, responsive UI
 
 ### Priority Improvements
+
 1. **Database-driven hardware classification** (reduces maintenance burden)
 2. **Comprehensive testing** (ensures reliability across platforms)
 3. **AMD GPU VRAM detection** (closes feature gap on Linux)
@@ -724,6 +765,7 @@ export async function scanHardware(): Promise<HardwareProfile> {
 5. **Progress indication** (better UX for long scans)
 
 ### Long-term Vision
+
 - **Game compatibility checking** (integrate with ProtonDB) → **See [INTELLIGENCE_LAYER.md](INTELLIGENCE_LAYER.md)**
 - **Benchmarking suite** (measure actual performance)
 - **Hardware recommendations** (suggest upgrades based on use case)
@@ -761,6 +803,7 @@ The next major feature is a **game compatibility checking system** that compares
    - ProtonDB integration (unique competitive advantage)
 
 **Implementation Timeline:**
+
 - **Week 1-2:** Bootstrap hardware/game databases
 - **Week 3-4:** MVP rules engine with top 100 games
 - **Week 5-6:** Data integration (ProtonDB, Steam Deck)
@@ -830,12 +873,14 @@ jobs:
 ## 📚 Additional Resources
 
 ### Recommended Reading
+
 - [Tauri Best Practices](https://tauri.app/v1/guides/development/security)
 - [Rust Error Handling](https://doc.rust-lang.org/book/ch09-00-error-handling.html)
 - [WMI Reference (Windows)](https://docs.microsoft.com/en-us/windows/win32/wmisdk/wmi-reference)
 - [Linux /proc documentation](https://man7.org/linux/man-pages/man5/proc.5.html)
 
 ### Community Resources
+
 - [TechPowerUp GPU Database](https://www.techpowerup.com/gpu-specs/) - For GPU specs
 - [CPU-World Database](http://www.cpu-world.com/) - For CPU specs
 - [ProtonDB API](https://www.protondb.com/) - For game compatibility

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { GameLibrary } from '../GameLibrary';
 import { invokeTauri } from '../../api/tauri';
@@ -16,8 +16,40 @@ const hardwareProfile = {
 };
 
 const games = [
-  { steam_id: 1, name: 'Good Game', genre: 'Action', release_year: 2020, header_image: null, protondb_rating: 'Gold', deck_status: 'Playable', verdict: { status: 'meets_recommended', confidence: 'high', summary: 'ok', details: [], min_requirements: null, rec_requirements: null } },
-  { steam_id: 2, name: 'Bad Game', genre: 'Puzzle', release_year: 2019, header_image: null, protondb_rating: 'Bronze', deck_status: 'Borked', verdict: { status: 'below_minimum', confidence: 'low', summary: 'bad', details: [], min_requirements: null, rec_requirements: null } },
+  {
+    steam_id: 1,
+    name: 'Good Game',
+    genre: 'Action',
+    release_year: 2020,
+    header_image: null,
+    protondb_rating: 'Gold',
+    deck_status: 'Playable',
+    verdict: {
+      status: 'meets_recommended',
+      confidence: 'high',
+      summary: 'ok',
+      details: [],
+      min_requirements: null,
+      rec_requirements: null,
+    },
+  },
+  {
+    steam_id: 2,
+    name: 'Bad Game',
+    genre: 'Puzzle',
+    release_year: 2019,
+    header_image: null,
+    protondb_rating: 'Bronze',
+    deck_status: 'Borked',
+    verdict: {
+      status: 'below_minimum',
+      confidence: 'low',
+      summary: 'bad',
+      details: [],
+      min_requirements: null,
+      rec_requirements: null,
+    },
+  },
 ];
 
 describe('GameLibrary extra coverage', () => {
@@ -38,8 +70,6 @@ describe('GameLibrary extra coverage', () => {
     const card = screen.getByText('Good Game');
     fireEvent.click(card);
 
-    // selecting a game should call check_game_compatibility when hardware is present; here we just
-    // ensure the card exists and is interactable in the flat list view
     expect(card).toBeInTheDocument();
   });
 });

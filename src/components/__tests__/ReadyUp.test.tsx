@@ -1,13 +1,9 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { ReadyUp } from '../ReadyUp';
-
-vi.mock('../../api/tauri', () => ({
-  invokeTauri: vi.fn(),
-}));
-
 import { invokeTauri } from '../../api/tauri';
 
+vi.mock('../../api/tauri', () => ({ invokeTauri: vi.fn() }));
 const mockedInvoke = vi.mocked(invokeTauri);
 
 const sampleReport = {
@@ -22,12 +18,10 @@ const sampleReport = {
 describe('ReadyUp', () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
-    // default: readyup checks succeed
     mockedInvoke.mockImplementation((cmd: string) => {
       if (cmd === 'run_readyup_checks') return Promise.resolve(sampleReport);
       return Promise.reject(new Error('unexpected'));
     });
-    // mock clipboard and alert
     (global as any).navigator.clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
     (global as any).alert = vi.fn();
   });

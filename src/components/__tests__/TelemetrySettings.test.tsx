@@ -1,6 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { TelemetrySettings } from '../TelemetrySettings';
+import { getTelemetryEnabled, setTelemetryEnabled, submitTelemetry } from '../../api/telemetry';
 
 vi.mock('../../api/telemetry', () => ({
   getTelemetryEnabled: vi.fn(),
@@ -8,8 +9,6 @@ vi.mock('../../api/telemetry', () => ({
   submitTelemetry: vi.fn(),
   hashHardware: vi.fn(() => 'deadbeef'),
 }));
-
-import { getTelemetryEnabled, setTelemetryEnabled, submitTelemetry } from '../../api/telemetry';
 
 const mockedGet = vi.mocked(getTelemetryEnabled);
 const mockedSet = vi.mocked(setTelemetryEnabled);
@@ -39,7 +38,6 @@ describe('TelemetrySettings', () => {
 
     render(<TelemetrySettings hardwareProfile={hardwareProfile as any} gameId={42} predictedVerdict={'meets_recommended'} />);
 
-    // Wait for loading to finish
     await waitFor(() => expect(screen.queryByText(/Loading settings/)).not.toBeInTheDocument());
 
     const checkbox = screen.getByRole('checkbox');
@@ -47,7 +45,6 @@ describe('TelemetrySettings', () => {
 
     await waitFor(() => expect(mockedSet).toHaveBeenCalledWith(true));
 
-    // Now the form should appear
     expect(screen.getByText(/Submit Performance Report/)).toBeInTheDocument();
 
     const submitBtn = screen.getByRole('button', { name: /Submit Report/i });
@@ -62,11 +59,9 @@ describe('TelemetrySettings', () => {
     render(<TelemetrySettings hardwareProfile={null} gameId={undefined as any} />);
     await waitFor(() => expect(screen.queryByText(/Loading settings/)).not.toBeInTheDocument());
 
-    // enable checkbox then try to submit (no form should be available)
     const checkbox = screen.getByRole('checkbox');
     fireEvent.click(checkbox);
 
-    // Try to click submit via DOM search (should not exist because hardware/game missing)
     expect(screen.queryByText(/Submit Performance Report/)).not.toBeInTheDocument();
   });
 });

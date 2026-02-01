@@ -1,10 +1,12 @@
 # ProtonDB Sync — Usage & Options
 
 Scripts:
+
 - `scripts/sync/protondb.js` — aggregated sync (summary endpoints + fallback)
 - `scripts/sync/protondb_apps.js` — per-app scraper/upserter (recommended)
 
 `protondb_apps.js` CLI options
+
 - `--file <path>`: JSON array of objects with `steam_id` (or `steamid`/`id`) to sync.
 - `<appId> ...`: provide numeric Steam app IDs as args.
 - `--rate <ms>`: default per-request delay (ms). Default: 300.
@@ -16,6 +18,7 @@ Scripts:
 - `--domain-limits <host=ms,host2=ms>`: comma-separated domain-specific delays.
 
 Behavior
+
 - Ensures a `games` row exists before inserting/updating `proton_compatibility`.
 - Uses per-domain scheduling to respect site rate limits across workers.
 - Falls back to HTML scraping when API endpoints are unavailable.
@@ -34,14 +37,17 @@ node scripts/sync/protondb_apps.js --file=data/games-top-100.json --retries 3 --
 ```
 
 Database
+
 - Database path: `src-tauri/intelligence.db`.
 - The script upserts into `games` (steam_id, name) and `proton_compatibility` (game_id, protondb_rating, total_reports, last_synced).
 
 Troubleshooting
+
 - If you see FK/NOT NULL errors, ensure `games` table has appropriate columns and `insertGameBySteamId` prepared statement matches the schema.
 - For site changes, update parsing in `fetchRatingForApp` and add sample HTML under `tests/fixtures/protondb/`.
 
 Respectful scraping
+
 - Set `--domain-rate` conservatively; ProtonDB is community-driven.
 - Prefer API endpoints if available.
 - Cache results and avoid re-syncing unchanged data.

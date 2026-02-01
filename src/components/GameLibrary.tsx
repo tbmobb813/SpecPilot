@@ -51,10 +51,11 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const [genreFilter, setGenreFilter] = useState<string>('all');
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
 
-  // Load all games on mount
+  // Load all games on mount and whenever `hardwareProfile` changes so
+  // compatibility verdicts are computed for the current hardware.
   useEffect(() => {
     loadGames();
-  }, []);
+  }, [hardwareProfile]);
 
   const loadGames = async () => {
     setLoading(true);
@@ -63,8 +64,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
 
     try {
       const results: GameResult[] = await invokeTauri('browse_games', {
-        filterVerdict: null,
-        filterGenre: null,
+        filter_verdict: null,
+        filter_genre: null,
         limit: 500,
         offset: 0,
       });
@@ -80,10 +81,19 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       // 3) Move batch processing server-side (bundle checks into fewer IPC calls).
       // 4) Reduce default batch size via `VITE_GAME_CHECK_BATCH_SIZE` for low-power devices.
       if (hardwareProfile) {
-        // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`, fallback to 20
+        // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`.
+        // Configuration:
+        //   - Define `VITE_GAME_CHECK_BATCH_SIZE=<positive integer>` in your `.env`, `.env.local`,
+        //     or other Vite-supported env file.
+        //   - This value controls how many games are checked per IPC batch when calling
+        //     `check_game_compatibility`. Smaller values reduce peak load/IPC pressure
+        //     but may increase total elapsed time.
+        //   - If the variable is unset, non-numeric, or not a positive number, the default
+        //     `DEFAULT_BATCH_SIZE` (20) is used.
         const rawBatchSize = import.meta?.env?.VITE_GAME_CHECK_BATCH_SIZE;
         const envSize = typeof rawBatchSize === 'string' ? Number(rawBatchSize) : NaN;
-        const BATCH_SIZE = Number.isFinite(envSize) && envSize > 0 ? envSize : 20;
+        const DEFAULT_BATCH_SIZE = 20;
+        const BATCH_SIZE = Number.isFinite(envSize) && envSize > 0 ? envSize : DEFAULT_BATCH_SIZE;
 
         // Show games immediately without verdicts, then update progressively
         setGames(results);
@@ -97,7 +107,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
             batch.map(async (game) => {
               try {
                 const verdict: VerdictResult = await invokeTauri('check_game_compatibility', {
-                  steamId: game.steam_id,
+                  steam_id: game.steam_id,
                   hardware: hardwareProfile,
                 });
                 return { ...game, verdict };
@@ -179,7 +189,9 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     setFilteredGames(filtered);
   }, [games, searchQuery, verdictFilter, genreFilter, hardwareProfile]);
 
-  // Call applyFilters whenever inputs change
+  // Call applyFilters whenever inputs or the callback identity change.
+  // `applyFilters` depends on `hardwareProfile`, so include it indirectly
+  // by depending on the stable `applyFilters` reference.
   useEffect(() => {
     applyFilters();
   }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
@@ -193,7 +205,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     setCheckingGame(game.steam_id);
     try {
       const verdict: VerdictResult = await invokeTauri('check_game_compatibility', {
-        steamId: game.steam_id,
+        steam_id: game.steam_id,
         hardware: hardwareProfile,
       });
       setSelectedGame({ ...game, verdict });

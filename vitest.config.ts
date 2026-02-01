@@ -10,7 +10,7 @@ export default defineConfig(async () => {
       environment: 'jsdom',
       setupFiles: './vitest.setup.ts',
       coverage: {
-        provider: 'c8',
+        provider: 'v8',
         reporter: ['text', 'html'],
         reportsDirectory: 'coverage/frontend',
         all: true,

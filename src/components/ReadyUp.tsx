@@ -71,6 +71,27 @@ export function ReadyUp() {
    * function should validate commands against an allowlist before copying.
    * See: src-tauri/src/commands/readyup.rs for the source of these commands.
    */
+  /**
+   * Copies a command string to the user's clipboard.
+   * 
+   * @param command - The command string to copy to clipboard. This should be a validated
+   * and sanitized string from the backend to prevent command injection attacks.
+   * 
+   * @remarks
+   * This function provides a safer alternative to automatic command execution by requiring
+   * users to manually execute copied commands. However, security depends on backend validation:
+   * - All command strings must be carefully validated and sanitized before being sent to the frontend
+   * - If a malicious actor could influence backend results, command injection attacks are possible
+   * - Currently safe because commands are hardcoded in the backend
+   * - If backend commands become dynamic in the future, implement additional validation/sanitization
+   * 
+   * @throws Logs errors to console if clipboard write fails and shows a fallback alert.
+   * 
+   * @example
+   * ```typescript
+   * await copyCommand('npm install');
+   * ```
+   */
   const copyCommand = async (command: string) => {
     try {
       await navigator.clipboard.writeText(command);

@@ -1,13 +1,12 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { HardwareScan } from '../HardwareScan';
+import { scanHardware, getCachedProfile } from '../../api/hardware';
 
 vi.mock('../../api/hardware', () => ({
   scanHardware: vi.fn(),
   getCachedProfile: vi.fn(),
 }));
-
-import { scanHardware, getCachedProfile } from '../../api/hardware';
 
 const mockedScan = vi.mocked(scanHardware);
 const mockedCached = vi.mocked(getCachedProfile);

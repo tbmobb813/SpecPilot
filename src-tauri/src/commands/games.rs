@@ -107,55 +107,135 @@ pub async fn search_games(query: String) -> Result<Vec<GameResult>, String> {
 
 #[tauri::command]
 pub async fn browse_games(
-    _filter_verdict: Option<String>,
     filter_genre: Option<String>,
     limit: Option<i32>,
     offset: Option<i32>,
+    filter_verdict: Option<String>,
 ) -> Result<Vec<GameResult>, String> {
     let pool = get_db_pool().await?;
 
     let limit_val = limit.unwrap_or(50);
     let offset_val = offset.unwrap_or(0);
 
-    // Build and execute parameterized query based on filters
+    // Build and execute parameterized query based on filters.
+    // `filter_verdict` controls whether we require parsed requirements:
+    // - None or any value other than "unparsed"/"all": only include games with `requirements_parsed = 1` (default)
+    // - "unparsed": include games where `requirements_parsed` is NULL or != 1
+    // - "all": include all games regardless of `requirements_parsed`
+    let parsed_mode = match filter_verdict.as_deref() {
+        Some("all") => "all",
+        Some("unparsed") => "unparsed",
+        _ => "parsed",
+    };
+
     let rows: Vec<GameRow> = if let Some(ref genre) = filter_genre {
         // With genre filter
-        sqlx::query_as(
-            "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                    p.protondb_rating, d.deck_status
-             FROM games g
-             LEFT JOIN proton_compatibility p ON p.game_id = g.id
-             LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
-             WHERE g.requirements_parsed = 1
-               AND g.genre LIKE ?
-             ORDER BY g.name
-             LIMIT ?
-             OFFSET ?",
-        )
-        .bind(format!("%{}%", genre))
-        .bind(limit_val)
-        .bind(offset_val)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?
+        match parsed_mode {
+            "all" => sqlx::query_as(
+                "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                        p.protondb_rating, d.deck_status
+                 FROM games g
+                 LEFT JOIN proton_compatibility p ON p.game_id = g.id
+                 LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 WHERE g.genre LIKE $1
+                 ORDER BY g.name
+                 LIMIT $2
+                 OFFSET $3",
+            )
+            .bind(format!("%{}%", genre))
+            .bind(limit_val)
+            .bind(offset_val)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?,
+            "unparsed" => sqlx::query_as(
+                "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                        p.protondb_rating, d.deck_status
+                 FROM games g
+                 LEFT JOIN proton_compatibility p ON p.game_id = g.id
+                 LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 WHERE (g.requirements_parsed IS NULL OR g.requirements_parsed != 1)
+                   AND g.genre LIKE $1
+                 ORDER BY g.name
+                 LIMIT $2
+                 OFFSET $3",
+            )
+            .bind(format!("%{}%", genre))
+            .bind(limit_val)
+            .bind(offset_val)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?,
+            _ => sqlx::query_as(
+                "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                        p.protondb_rating, d.deck_status
+                 FROM games g
+                 LEFT JOIN proton_compatibility p ON p.game_id = g.id
+                 LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 WHERE g.requirements_parsed = 1
+                   AND g.genre LIKE $1
+                 ORDER BY g.name
+                 LIMIT $2
+                 OFFSET $3",
+            )
+            .bind(format!("%{}%", genre))
+            .bind(limit_val)
+            .bind(offset_val)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?,
+        }
     } else {
         // Without genre filter
-        sqlx::query_as(
-            "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                    p.protondb_rating, d.deck_status
-             FROM games g
-             LEFT JOIN proton_compatibility p ON p.game_id = g.id
-             LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
-             WHERE g.requirements_parsed = 1
-             ORDER BY g.name
-             LIMIT ?
-             OFFSET ?",
-        )
-        .bind(limit_val)
-        .bind(offset_val)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?
+        match parsed_mode {
+            "all" => sqlx::query_as(
+                "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                        p.protondb_rating, d.deck_status
+                 FROM games g
+                 LEFT JOIN proton_compatibility p ON p.game_id = g.id
+                 LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 ORDER BY g.name
+                 LIMIT $1
+                 OFFSET $2",
+            )
+            .bind(limit_val)
+            .bind(offset_val)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?,
+            "unparsed" => sqlx::query_as(
+                "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                        p.protondb_rating, d.deck_status
+                 FROM games g
+                 LEFT JOIN proton_compatibility p ON p.game_id = g.id
+                 LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 WHERE (g.requirements_parsed IS NULL OR g.requirements_parsed != 1)
+                 ORDER BY g.name
+                 LIMIT $1
+                 OFFSET $2",
+            )
+            .bind(limit_val)
+            .bind(offset_val)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?,
+            _ => sqlx::query_as(
+                "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                        p.protondb_rating, d.deck_status
+                 FROM games g
+                 LEFT JOIN proton_compatibility p ON p.game_id = g.id
+                 LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 WHERE g.requirements_parsed = 1
+                 ORDER BY g.name
+                 LIMIT $1
+                 OFFSET $2",
+            )
+            .bind(limit_val)
+            .bind(offset_val)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?,
+        }
     };
 
     let results = rows.into_iter().map(|row| GameResult {
@@ -348,26 +428,34 @@ pub async fn check_game_compatibility(
     } else {
             // Check if we significantly exceed recommended specs.
             // Only consider a metric if the corresponding recommended value is present.
-            let mut exceeds = false;
+            // Instead of requiring any single metric to be > 2x, compute an average ratio
+            // across all available metrics and require that average to be >= 2.0.
+            let mut total_ratio: f64 = 0.0;
+            let mut metrics_count: i32 = 0;
 
             if let Some(rec_ram) = game.rec_ram_mb {
-                if user_ram_mb > (rec_ram as i64) * 2 {
-                    exceeds = true;
+                if rec_ram > 0 {
+                    total_ratio += (user_ram_mb as f64) / (rec_ram as f64);
+                    metrics_count += 1;
                 }
             }
 
             if let Some(rec_vram) = game.rec_gpu_vram_mb {
-                if user_vram_mb > (rec_vram as i64) * 2 {
-                    exceeds = true;
+                if rec_vram > 0 {
+                    total_ratio += (user_vram_mb as f64) / (rec_vram as f64);
+                    metrics_count += 1;
                 }
             }
 
             if let Some(rec_cores) = game.rec_cpu_cores {
-                if user_cpu_cores > (rec_cores as i64) * 2 {
-                    exceeds = true;
+                if rec_cores > 0 {
+                    total_ratio += (user_cpu_cores as f64) / (rec_cores as f64);
+                    metrics_count += 1;
                 }
             }
 
+            let exceeds = metrics_count > 0
+                && (total_ratio / metrics_count as f64) >= 2.0;
             if exceeds {
                 (
                     "exceeds_recommended".to_string(),
@@ -415,7 +503,7 @@ fn generate_tier_fallback_verdict(hardware: &HardwareProfile) -> VerdictResult {
         6..=7 => ("likely_good", "Based on your hardware tier, this game should run well"),
         4..=5 => ("likely_playable", "Based on your hardware tier, this game should be playable"),
         2..=3 => ("uncertain", "Based on your hardware tier, performance may vary"),
-        1 => ("likely_challenging", "Based on your hardware tier, this game may be demanding for your system"),
+        1 => ("uncertain", "Your budget hardware may struggle with this game"),
         _ => ("unknown", "Unable to determine hardware tier"),
     };
 
