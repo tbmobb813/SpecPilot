@@ -5,8 +5,6 @@
  * Initializes the database and populates it with:
  * - Popular games from data/popular-games.json
  * - Optionally fetches requirements from Steam
- * - Syncs ProtonDB data
- * - Syncs anti-cheat data
  *
  * Usage:
  *   npm run db:seed                    # Full seed (games + requirements)
