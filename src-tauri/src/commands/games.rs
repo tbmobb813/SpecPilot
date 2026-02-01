@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 // removed unused import to silence warnings
 use crate::hardware::HardwareProfile;
 use crate::db::get_db_pool;
+use sqlx::Row;
 
 // Use shared DB pool from `db` module (see src/db.rs)
 
@@ -50,7 +51,9 @@ struct GameRow {
 #[allow(dead_code)]
 #[derive(Debug, sqlx::FromRow)]
 struct GameRequirementsRow {
+    id: i64,
     name: String,
+    steam_id: Option<i64>,
     min_cpu_cores: Option<i32>,
     min_cpu_clock_ghz: Option<f64>,
     min_cpu_text: Option<String>,
@@ -261,7 +264,7 @@ pub async fn check_game_compatibility(
 
     // Fetch game requirements
     let game: Option<GameRequirementsRow> = sqlx::query_as(
-        "SELECT name,
+        "SELECT id, steam_id, name,
                 min_cpu_cores, min_cpu_clock_ghz, min_cpu_text, min_ram_mb,
                 min_gpu_vram_mb, min_gpu_text, min_storage_gb,
                 rec_cpu_cores, rec_cpu_clock_ghz, rec_cpu_text, rec_ram_mb,
@@ -278,6 +281,60 @@ pub async fn check_game_compatibility(
         Some(g) => g,
         None => return Ok(generate_unknown_verdict()),
     };
+
+    // Fetch ProtonDB compatibility and anti-cheat status (if available)
+    let mut proton_rating_str = "unknown".to_string();
+    let mut proton_total_reports: i64 = 0;
+    // Query proton_compatibility by game_id (games.id)
+    if let Ok(row_opt) = sqlx::query("SELECT protondb_rating, total_reports FROM proton_compatibility WHERE game_id = ?")
+        .bind(game.id)
+        .fetch_optional(&pool)
+        .await
+    {
+        if let Some(row) = row_opt {
+            proton_rating_str = row.try_get::<Option<String>, _>("protondb_rating").ok().flatten().unwrap_or_else(|| "unknown".to_string());
+            proton_total_reports = row.try_get::<Option<i64>, _>("total_reports").ok().flatten().unwrap_or(0);
+        }
+    }
+
+    // anti-cheat by steam_id
+    let mut anti_ac_type = "".to_string();
+    let mut anti_ac_linux_status = "unknown".to_string();
+    if let Some(sid) = game.steam_id {
+        if let Ok(row_opt) = sqlx::query("SELECT anti_cheat_type, linux_status FROM anti_cheat_status WHERE steam_id = ?")
+            .bind(sid)
+            .fetch_optional(&pool)
+            .await
+        {
+            if let Some(row) = row_opt {
+                anti_ac_type = row.try_get::<Option<String>, _>("anti_cheat_type").ok().flatten().unwrap_or_default();
+                anti_ac_linux_status = row.try_get::<Option<String>, _>("linux_status").ok().flatten().unwrap_or("unknown".to_string());
+            }
+        }
+    }
+
+    // If anti-cheat blocks Linux (denied/broken) or Proton rating is Borked, return early as unplayable
+    let linux_blocking = anti_ac_linux_status.to_lowercase().contains("denied") || anti_ac_linux_status.to_lowercase().contains("broken");
+    if linux_blocking {
+        return Ok(VerdictResult {
+            status: "below_minimum".to_string(),
+            confidence: "low".to_string(),
+            summary: format!("Blocked by anti-cheat: {} ({})", anti_ac_type, anti_ac_linux_status),
+            details: vec![format!("AntiCheat: {} ({})", anti_ac_type, anti_ac_linux_status)],
+            min_requirements: None,
+            rec_requirements: None,
+        });
+    }
+    if proton_rating_str.to_lowercase() == "borked" {
+        return Ok(VerdictResult {
+            status: "below_minimum".to_string(),
+            confidence: "low".to_string(),
+            summary: "ProtonDB reports this game as Borked on Linux".to_string(),
+            details: vec![format!("ProtonDB rating: {} ({} reports)", proton_rating_str, proton_total_reports)],
+            min_requirements: None,
+            rec_requirements: None,
+        });
+    }
 
     
 

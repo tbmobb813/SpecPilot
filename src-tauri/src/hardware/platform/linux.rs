@@ -301,19 +301,39 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
             }
         }
         GpuVendor::AMD => {
-            // Method 1: Try sysfs entries created by amdgpu driver
-            // Path: /sys/class/drm/card0/device/mem_info_vram_total
-            if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/mem_info_vram_total") {
-                for entry in entries.filter_map(|r| r.ok()) {
-                    if let Ok(vram_str) = std::fs::read_to_string(&entry) {
-                        if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
-                            return Ok(vram_bytes / (1024 * 1024)); // Bytes -> MB
+            // Method 1: Try several sysfs entries created by amdgpu driver
+            // Common paths include:
+            // /sys/class/drm/card*/device/mem_info_vram_total (bytes)
+            // /sys/class/drm/card*/device/memory_info_vram_total
+            // /sys/kernel/debug/dri/*/mem_info_vram_total
+            let sysfs_patterns = [
+                "/sys/class/drm/card*/device/mem_info_vram_total",
+                "/sys/class/drm/card*/device/memory_info_vram_total",
+                "/sys/kernel/debug/dri/*/mem_info_vram_total",
+            ];
+
+            for pat in &sysfs_patterns {
+                if let Ok(entries) = glob::glob(pat) {
+                    for entry in entries.filter_map(|r| r.ok()) {
+                        if let Ok(vram_raw) = std::fs::read_to_string(&entry) {
+                            let vram_trim = vram_raw.trim();
+                            // Some sysfs exporters include whitespace or non-digit chars; extract digits only
+                            let digits_only: String = vram_trim.chars().filter(|c| c.is_digit(10)).collect();
+                            if let Ok(digits) = digits_only.parse::<u64>() {
+                                // Many sysfs values are bytes; if value seems large assume bytes
+                                if digits > (16 * 1024 * 1024) { // >16MB in bytes
+                                    return Ok(digits / (1024 * 1024));
+                                } else {
+                                    // Probably already in MB
+                                    return Ok(digits);
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Method 2: Try alternate sysfs path (some drivers use this)
+            // Method 2: Try alternate sysfs path (some drivers expose PCI resource ranges)
             if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/resource") {
                 for entry in entries.filter_map(|r| r.ok()) {
                     if let Ok(content) = std::fs::read_to_string(&entry) {
@@ -454,17 +474,34 @@ fn parse_radeontop_vram(output: &str) -> Option<u64> {
 fn parse_rocm_smi_output(s: &str) -> Option<u64> {
     for line in s.lines() {
         let lower = line.to_lowercase();
-        if lower.contains("vram") || lower.contains("memory") || lower.contains("mem") {
-            // Try to find a token containing a number with optional 'MB'
-            for tok in line.split_whitespace() {
+        if lower.contains("vram") || lower.contains("memory") || lower.contains("mem") || lower.contains("total") {
+            // Normalize tokens by removing commas and parentheses
+            let cleaned = line.replace(',', " ").replace('(', " ").replace(')', " ");
+            for tok in cleaned.split_whitespace() {
                 let t = tok.trim().trim_end_matches(',');
-                if let Some(n) = t.strip_suffix("MB") {
-                    if let Ok(val) = n.parse::<u64>() {
+                // Accept MB, MiB, GB, GiB
+                let tl = t.to_lowercase();
+                if tl.ends_with("mib") || tl.ends_with("mb") {
+                    let num = tl.trim_end_matches("mib").trim_end_matches("mb").trim();
+                    if let Ok(n) = num.parse::<u64>() {
+                        return Some(n);
+                    }
+                }
+                if tl.ends_with("gib") || tl.ends_with("gb") {
+                    let num = tl.trim_end_matches("gib").trim_end_matches("gb").trim();
+                    if let Ok(n) = num.parse::<u64>() {
+                        return Some(n * 1024);
+                    }
+                }
+                // Plain number token - interpret as MB if reasonable
+                if let Ok(val) = t.parse::<u64>() {
+                    if val > 64 && val < 200000 { // plausible MB range
                         return Some(val);
                     }
-                } else if let Ok(val) = t.parse::<u64>() {
-                    // If token is a plain number, assume it's MB
-                    return Some(val);
+                    // If value looks like bytes, convert
+                    if val > (1024 * 1024) {
+                        return Some(val / (1024 * 1024));
+                    }
                 }
             }
         }
