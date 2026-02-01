@@ -62,7 +62,7 @@ export function GameCheck({ hardwareProfile }: GameCheckProps) {
       const games: GameResult[] = await invokeTauri('search_games', { query: searchQuery });
       setResults(games);
     } catch (e) {
-      setError(e as string);
+      setError(e instanceof Error ? e.message : String(e));
       setResults([]);
     } finally {
       setSearching(false);
