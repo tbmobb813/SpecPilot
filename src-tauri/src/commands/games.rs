@@ -199,6 +199,8 @@ pub async fn check_game_compatibility(
         None => return Ok(generate_unknown_verdict()),
     };
 
+    
+
     // Check if we have parsed requirements
     if game.requirements_parsed != Some(1) {
         return Ok(generate_tier_fallback_verdict(&hardware));
@@ -306,7 +308,17 @@ pub async fn check_game_compatibility(
         let min_storage = min_storage as i64;
         checks_performed += 1;
         if user_storage_gb >= min_storage {
-            details.push(format!("✅ Storage: {} GB available (need {} GB)", user_storage_gb, min_storage));
+            if let Some(rec_storage) = game.rec_storage_gb {
+                let rec_storage = rec_storage as i64;
+                if user_storage_gb >= rec_storage {
+                    details.push(format!("✅ Storage: {} GB available (recommended: {} GB)", user_storage_gb, rec_storage));
+                } else {
+                    details.push(format!("🟡 Storage: {} GB available (minimum: {} GB, recommended: {} GB)", user_storage_gb, min_storage, rec_storage));
+                    meets_rec = false;
+                }
+            } else {
+                details.push(format!("✅ Storage: {} GB available (need {} GB)", user_storage_gb, min_storage));
+            }
         } else {
             details.push(format!("❌ Storage: {} GB available (need {} GB)", user_storage_gb, min_storage));
             meets_min = false;

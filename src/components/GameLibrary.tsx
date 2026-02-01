@@ -88,12 +88,17 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
         // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`, fallback to 20
         const envSize = Number((import.meta as any).env?.VITE_GAME_CHECK_BATCH_SIZE);
         const BATCH_SIZE = Number.isFinite(envSize) && envSize > 0 ? envSize : 20;
-        const gamesWithVerdicts: GameResult[] = [];
+
+        // Show games immediately without verdicts, then update progressively
+        setGames(results);
+        setLoading(false);
+
+        const gamesWithVerdicts: GameResult[] = [...results];
 
         for (let i = 0; i < results.length; i += BATCH_SIZE) {
           const batch = results.slice(i, i + BATCH_SIZE);
           const batchResults = await Promise.all(
-            batch.map(async (game) => {
+            batch.map(async (game, batchIndex) => {
               try {
                 const verdict: VerdictResult = await invoke('check_game_compatibility', {
                   steamId: game.steam_id,
@@ -105,12 +110,17 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               }
             })
           );
-          gamesWithVerdicts.push(...batchResults);
-          
-          // Update progress indicator
-          setLoadingProgress({ current: gamesWithVerdicts.length, total: results.length });
+
+          // Update games array with new verdicts
+          batchResults.forEach((result, batchIndex) => {
+            gamesWithVerdicts[i + batchIndex] = result;
+          });
+
+          // Update UI progressively
+          setGames([...gamesWithVerdicts]);
+          setLoadingProgress({ current: i + batch.length, total: results.length });
         }
-        setGames(gamesWithVerdicts);
+        setLoadingProgress(null);
       } else {
         setGames(results);
       }
