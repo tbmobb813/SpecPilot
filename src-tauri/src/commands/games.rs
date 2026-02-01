@@ -437,7 +437,6 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use sqlx::sqlite::SqlitePool;
-    use std::env;
     use crate::db::reset_db_pool;
     use crate::hardware::{
         CpuInfo, GpuInfo, MemoryInfo, StorageInfo, OsInfo, GraphicsApiSupport,
