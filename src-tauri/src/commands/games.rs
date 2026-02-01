@@ -721,10 +721,10 @@ mod tests {
         // Build a hardware profile that has more than minimum but there are no recommended values
         // Note: set_db_pool_for_tests already registered the pool, so no CWD change needed
         let hw = HardwareProfile {
-            cpu: CpuInfo { model: "TestCPU".into(), vendor: "TestVendor".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
-            gpu: GpuInfo { model: "TestGPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
-            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
-            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd },
+            cpu: CpuInfo { model: "TestCPU".into(), vendor: "TestVendor".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream, detection: Default::default() },
+            gpu: GpuInfo { model: "TestGPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd, detection: Default::default() },
             os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
             graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
         };
@@ -796,10 +796,10 @@ mod tests {
         // No process-wide cwd changes required; tests register the pool directly.
 
         let hw = HardwareProfile {
-            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 8, threads: 8, base_clock: 3.0, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Performance },
-            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Performance },
-            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
-            storage: StorageInfo { total: 1000, available: 500, storage_type: StorageType::NvmeSsd },
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 8, threads: 8, base_clock: 3.0, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Performance, detection: Default::default() },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Performance, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 1000, available: 500, storage_type: StorageType::NvmeSsd, detection: Default::default() },
             os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
             graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
         };

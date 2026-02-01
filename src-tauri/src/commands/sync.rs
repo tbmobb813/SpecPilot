@@ -15,39 +15,63 @@ pub async fn sync_protondb(app_handle: tauri::AppHandle) -> Result<String, Strin
         .arg("--version")
         .output()
         .map_err(|_| "Node.js is not installed or not found in PATH. Please install Node.js to use this feature.".to_string())?;
-    
+
     if !node_check.status.success() {
         return Err("Node.js is installed but not working correctly. Please verify your Node.js installation.".to_string());
     }
 
-    // Get the app's resource directory and construct absolute path to script
-    let app_dir = app_handle
-        .path_resolver()
-        .app_dir()
-        .ok_or_else(|| "Failed to resolve app directory".to_string())?;
-    
-    let mut script_path = PathBuf::from(&app_dir);
-    
-    // Search for the script by traversing up the directory tree
-    // This handles both development and production scenarios where app_dir depth may vary
-    for _ in 0..MAX_SCRIPT_SEARCH_DEPTH {
-        script_path.pop();
-        let candidate = script_path.join("scripts/sync/protondb.js");
-        if candidate.exists() {
-            let output = Command::new("node")
-                .arg(candidate)
-                .output()
-                .map_err(|e| format!("Failed to execute node: {}", e))?;
+    // Build a list of candidate starting paths to search for the script. We include:
+    // - Tauri app_dir (runtime-resolved)
+    // - current executable parent
+    // - current working directory
+    // - compile-time CARGO_MANIFEST_DIR (useful during development)
+    // - a simple relative ../ fallback
+    let mut candidates: Vec<PathBuf> = Vec::new();
 
-            if output.status.success() {
-                return Ok(String::from_utf8_lossy(&output.stdout).to_string());
-            } else {
-                return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    if let Some(app_dir) = app_handle.path_resolver().app_dir() {
+        candidates.push(PathBuf::from(app_dir));
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            candidates.push(parent.to_path_buf());
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd);
+    }
+
+    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+        candidates.push(PathBuf::from(manifest_dir));
+    }
+
+    candidates.push(PathBuf::from(".."));
+
+    // Search up from each candidate for the script path
+    for start in candidates {
+        let mut p = start.clone();
+        for _ in 0..=MAX_SCRIPT_SEARCH_DEPTH {
+            let candidate = p.join("scripts/sync/protondb.js");
+            if candidate.exists() {
+                let output = Command::new("node")
+                    .arg(candidate)
+                    .output()
+                    .map_err(|e| format!("Failed to execute node: {}", e))?;
+
+                if output.status.success() {
+                    return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+                } else {
+                    return Err(String::from_utf8_lossy(&output.stderr).to_string());
+                }
+            }
+            if !p.pop() {
+                break;
             }
         }
     }
 
-    Err("ProtonDB sync script not found. Ensure scripts/sync/protondb.js exists in the project root.".to_string())
+    Err("ProtonDB sync script not found. Ensure scripts/sync/protondb.js exists or bundle the sync tool with the application.".to_string())
 }
 
 // Note: Integration tests for sync_protondb would require mocking AppHandle,

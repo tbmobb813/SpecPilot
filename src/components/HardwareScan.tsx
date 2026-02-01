@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { scanHardware, getCachedProfile, HardwareProfile, CpuTier, GpuTier } from '../api/hardware';
+import { scanHardware, getCachedProfile, HardwareProfile, CpuTier, GpuTier, DetectionConfidence, DetectionMetadata } from '../api/hardware';
 
 interface HardwareScanProps {
   onProfileUpdate?: (profile: HardwareProfile | null) => void;
@@ -54,6 +54,63 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
     return type.replace(/_/g, ' ');
   };
 
+  const getConfidenceColor = (confidence: DetectionConfidence): string => {
+    switch (confidence) {
+      case 'VeryHigh': return '#22c55e'; // Green
+      case 'High': return '#3b82f6';     // Blue
+      case 'Moderate': return '#eab308'; // Yellow
+      case 'Low': return '#f97316';      // Orange
+      case 'Unknown': return '#6b7280';  // Gray
+      default: return '#6b7280';
+    }
+  };
+
+  const getConfidenceLabel = (confidence: DetectionConfidence): string => {
+    switch (confidence) {
+      case 'VeryHigh': return 'Very High';
+      case 'High': return 'High';
+      case 'Moderate': return 'Moderate';
+      case 'Low': return 'Low';
+      case 'Unknown': return 'Unknown';
+      default: return 'Unknown';
+    }
+  };
+
+  const renderDetectionBadge = (detection?: DetectionMetadata): React.ReactNode => {
+    if (!detection) return null;
+
+    const color = getConfidenceColor(detection.confidence);
+    const label = getConfidenceLabel(detection.confidence);
+
+    return (
+      <div
+        className="detection-badge"
+        title={`Detection method: ${detection.method}`}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '2px 8px',
+          borderRadius: '4px',
+          fontSize: '0.75rem',
+          backgroundColor: `${color}20`,
+          color: color,
+          border: `1px solid ${color}40`,
+          marginLeft: '8px'
+        }}
+      >
+        <span style={{
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          backgroundColor: color
+        }} />
+        {label}
+        <span style={{ opacity: 0.7, fontSize: '0.7rem' }}>({detection.method})</span>
+      </div>
+    );
+  };
+
   return (
     <div className="hardware-scan">
       <div className="scan-header">
@@ -76,7 +133,10 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
       {profile && (
         <div className="results">
           <div className="section cpu-section">
-            <h3>🖥️ CPU</h3>
+            <h3>
+              🖥️ CPU
+              {renderDetectionBadge(profile.cpu.detection)}
+            </h3>
             <div className="info-grid">
               <div className="info-item">
                 <span className="label">Model:</span>
@@ -106,7 +166,10 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
           </div>
 
           <div className="section gpu-section">
-            <h3>🎮 GPU</h3>
+            <h3>
+              🎮 GPU
+              {renderDetectionBadge(profile.gpu.detection)}
+            </h3>
             <div className="info-grid">
               <div className="info-item">
                 <span className="label">Model:</span>
@@ -118,7 +181,10 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
               </div>
               <div className="info-item">
                 <span className="label">VRAM:</span>
-                <span className="value">{profile.gpu.vram} MB</span>
+                <span className="value">
+                  {profile.gpu.vram} MB
+                  {renderDetectionBadge(profile.gpu.vram_detection)}
+                </span>
               </div>
               <div className="info-item">
                 <span className="label">Driver:</span>
@@ -132,7 +198,10 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
           </div>
 
           <div className="section memory-section">
-            <h3>💾 Memory</h3>
+            <h3>
+              💾 Memory
+              {renderDetectionBadge(profile.memory.detection)}
+            </h3>
             <div className="info-grid">
               <div className="info-item">
                 <span className="label">Total RAM:</span>
@@ -158,7 +227,10 @@ export function HardwareScan({ onProfileUpdate }: HardwareScanProps) {
           </div>
 
           <div className="section storage-section">
-            <h3>💿 Storage</h3>
+            <h3>
+              💿 Storage
+              {renderDetectionBadge(profile.storage.detection)}
+            </h3>
             <div className="info-grid">
               <div className="info-item">
                 <span className="label">Total:</span>

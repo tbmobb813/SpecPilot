@@ -1,5 +1,14 @@
 // Use dynamic import for Tauri `invoke` so web/dev (Vite) environment doesn't crash
 
+// Detection confidence levels for hardware components
+export type DetectionConfidence = 'VeryHigh' | 'High' | 'Moderate' | 'Low' | 'Unknown';
+
+// Metadata about how a hardware component was detected
+export interface DetectionMetadata {
+  confidence: DetectionConfidence;
+  method: string; // e.g., "nvidia-smi", "/proc/cpuinfo", "lspci"
+}
+
 export interface HardwareProfile {
   cpu: CpuInfo;
   gpu: GpuInfo;
@@ -18,6 +27,7 @@ export interface CpuInfo {
   boost_clock?: number;
   architecture: string;
   tier: CpuTier;
+  detection?: DetectionMetadata;
 }
 
 export interface GpuInfo {
@@ -27,6 +37,8 @@ export interface GpuInfo {
   driver_version: string;
   pci_id?: string;
   tier: GpuTier;
+  detection?: DetectionMetadata;        // GPU model detection method
+  vram_detection?: DetectionMetadata;   // VRAM detection often uses different method
 }
 
 export interface MemoryInfo {
@@ -34,12 +46,14 @@ export interface MemoryInfo {
   available: number;
   speed?: number;
   ddr_type?: string;
+  detection?: DetectionMetadata;
 }
 
 export interface StorageInfo {
   total: number;
   available: number;
   storage_type: StorageType;
+  detection?: DetectionMetadata;
 }
 
 export interface OsInfo {

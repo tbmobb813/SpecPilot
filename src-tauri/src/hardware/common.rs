@@ -1,5 +1,84 @@
 use serde::{Deserialize, Serialize};
 
+/// Detection confidence levels for hardware components
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DetectionConfidence {
+    /// System APIs, /proc files, official tools (nvidia-smi, WMI)
+    VeryHigh,
+    /// Reliable detection methods (lspci, sysfs)
+    High,
+    /// Fallback methods with reasonable accuracy (rocm-smi, modinfo)
+    Moderate,
+    /// Heuristic or approximation-based (glxinfo fallback, string matching)
+    Low,
+    /// Detection failed or used defaults
+    Unknown,
+}
+
+impl DetectionConfidence {
+    pub fn label(&self) -> &'static str {
+        match self {
+            DetectionConfidence::VeryHigh => "Very High",
+            DetectionConfidence::High => "High",
+            DetectionConfidence::Moderate => "Moderate",
+            DetectionConfidence::Low => "Low",
+            DetectionConfidence::Unknown => "Unknown",
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            DetectionConfidence::VeryHigh => "Detected via official system API or driver tool",
+            DetectionConfidence::High => "Detected via reliable system interface",
+            DetectionConfidence::Moderate => "Detected via fallback method",
+            DetectionConfidence::Low => "Estimated or approximated",
+            DetectionConfidence::Unknown => "Could not be detected",
+        }
+    }
+}
+
+/// Metadata about how a hardware component was detected
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectionMetadata {
+    pub confidence: DetectionConfidence,
+    pub method: String,  // e.g., "nvidia-smi", "/proc/cpuinfo", "WMI"
+}
+
+impl DetectionMetadata {
+    pub fn new(confidence: DetectionConfidence, method: impl Into<String>) -> Self {
+        Self {
+            confidence,
+            method: method.into(),
+        }
+    }
+
+    pub fn very_high(method: impl Into<String>) -> Self {
+        Self::new(DetectionConfidence::VeryHigh, method)
+    }
+
+    pub fn high(method: impl Into<String>) -> Self {
+        Self::new(DetectionConfidence::High, method)
+    }
+
+    pub fn moderate(method: impl Into<String>) -> Self {
+        Self::new(DetectionConfidence::Moderate, method)
+    }
+
+    pub fn low(method: impl Into<String>) -> Self {
+        Self::new(DetectionConfidence::Low, method)
+    }
+
+    pub fn unknown() -> Self {
+        Self::new(DetectionConfidence::Unknown, "unknown")
+    }
+}
+
+impl Default for DetectionMetadata {
+    fn default() -> Self {
+        Self::unknown()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HardwareProfile {
     pub cpu: CpuInfo,
@@ -20,6 +99,8 @@ pub struct CpuInfo {
     pub boost_clock: Option<f32>, // GHz
     pub architecture: String,    // x86_64, ARM, etc.
     pub tier: CpuTier,
+    #[serde(default)]
+    pub detection: DetectionMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +111,10 @@ pub struct GpuInfo {
     pub driver_version: String,
     pub pci_id: Option<String>, // For exact matching
     pub tier: GpuTier,
+    #[serde(default)]
+    pub detection: DetectionMetadata,
+    #[serde(default)]
+    pub vram_detection: DetectionMetadata,  // VRAM often uses different method
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +123,8 @@ pub struct MemoryInfo {
     pub available: u64, // MB
     pub speed: Option<u32>, // MHz
     pub ddr_type: Option<String>, // DDR4, DDR5, etc.
+    #[serde(default)]
+    pub detection: DetectionMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +132,8 @@ pub struct StorageInfo {
     pub total: u64,     // GB
     pub available: u64, // GB
     pub storage_type: StorageType,
+    #[serde(default)]
+    pub detection: DetectionMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
