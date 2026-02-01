@@ -15,6 +15,7 @@ fn find_db_path() -> Option<String> {
             candidates.push(parent.join("resources").join("intelligence.db"));
             candidates.push(parent.join("..").join("share").join("specpilot").join("intelligence.db"));
         }
+
     }
 
     // Fallbacks for development layouts
@@ -36,19 +37,7 @@ fn find_db_path() -> Option<String> {
 
 pub async fn get_db_pool() -> Result<SqlitePool, String> {
     let pool_ref = DB_POOL
-        .get_or_try_init(async {
-            let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
-            let db_url = format!("sqlite:{}", db_path);
-            SqlitePool::connect(&db_url)
-                .await
-                .map_err(|e| format!("Failed to connect to database: {}", e))
-        })
-        .await?;
-
-    Ok(pool_ref.clone())
-}
-    let pool_ref = DB_POOL
-        .get_or_try_init(async {
+        .get_or_try_init(|| async {
             let db_path = find_db_path().ok_or("Database not found. Run 'npm run scrape:requirements --popular' first.")?;
             let db_url = format!("sqlite:{}", db_path);
             SqlitePool::connect(&db_url)

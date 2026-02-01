@@ -107,7 +107,6 @@ pub async fn search_games(query: String) -> Result<Vec<GameResult>, String> {
 
 #[tauri::command]
 pub async fn browse_games(
-    #[tauri::command]
     filter_genre: Option<String>,
     limit: Option<i32>,
     offset: Option<i32>,
