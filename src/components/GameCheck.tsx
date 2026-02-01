@@ -10,12 +10,18 @@ interface GameResult {
   verdict?: VerdictResult;
 }
 
-interface VerdictResult {
-  status: 'exceeds_recommended' | 'meets_recommended' | 'meets_minimum' | 'below_minimum' | 'unknown';
-  confidence: 'high' | 'medium' | 'low';
-  summary: string;
-  details: string[];
-}
+/*
+ Copilot AI note (manual review):
+ The `VerdictResult` type previously used by an older/unused `GameCheck` component
+ defined `status` as one of: 'excellent' | 'good' | 'playable' | 'struggling' |
+ 'unsupported' | 'unknown'. However, the backend `check_game_compatibility`
+ (src-tauri/src/commands/games.rs) returns values like:
+ 'exceeds_recommended', 'meets_recommended', 'meets_minimum', 'below_minimum', 'unknown'.
+
+ This mismatch will cause type/runtime inconsistencies. The component also appears
+ to be stale/unused in the current codebase. Ensure frontend types mirror the
+ backend `VerdictResult` or add a mapping layer when consuming verdicts.
+*/
 
 interface GameCheckProps {
   hardwareProfile: HardwareProfile | null;

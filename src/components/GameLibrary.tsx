@@ -76,6 +76,14 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
 
       // Check compatibility for each game if hardware is available
       // Process in batches to avoid overwhelming the backend
+      // Performance concern — loading many games (e.g. 500)
+      // and then issuing batches of Tauri `check_game_compatibility` calls
+      // (20 at a time) still results in many IPC invocations and can take a
+      // long time or freeze the UI. Consider the following mitigations:
+      // 1) Implement progressive loading / pagination instead of fetching all games.
+      // 2) Show a progress indicator (already present) and allow cancellation.
+      // 3) Move batch processing server-side (bundle checks into fewer IPC calls).
+      // 4) Reduce default batch size via `VITE_GAME_CHECK_BATCH_SIZE` for low-power devices.
       if (hardwareProfile) {
         // Read batch size from Vite env `VITE_GAME_CHECK_BATCH_SIZE`, fallback to 20
         const envSize = Number((import.meta as any).env?.VITE_GAME_CHECK_BATCH_SIZE);
