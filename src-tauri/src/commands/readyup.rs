@@ -146,9 +146,9 @@ fn check_storage() -> SystemCheck {
             // Parse df output: Filesystem Size Used Avail Use% Mounted
             if let Some(line) = stdout.lines().nth(1) {
                 let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 4 {
-                    let available = parts[3];
-                    let use_percent = parts[4].trim_end_matches('%');
+                // Safely access expected df columns: 0=Filesystem,1=Size,2=Used,3=Avail,4=Use%,5=Mounted
+                if let (Some(available), Some(use_pct_raw)) = (parts.get(3), parts.get(4)) {
+                    let use_percent = use_pct_raw.trim_end_matches('%');
 
                     let status = if let Ok(pct) = use_percent.parse::<u32>() {
                         if pct >= 95 {
