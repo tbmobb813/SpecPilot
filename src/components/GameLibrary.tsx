@@ -182,7 +182,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   // Call applyFilters whenever inputs change
   useEffect(() => {
     applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
+  }, [games, searchQuery, verdictFilter, genreFilter]);
 
   const checkGameCompatibility = async (game: GameResult) => {
     if (!hardwareProfile) {
