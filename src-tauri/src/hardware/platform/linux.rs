@@ -317,9 +317,23 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
                     for entry in entries.filter_map(|r| r.ok()) {
                         if let Ok(vram_raw) = std::fs::read_to_string(&entry) {
                             let vram_trim = vram_raw.trim();
-                            // Some sysfs exporters include whitespace or non-digit chars; extract digits only
-                            let digits_only: String = vram_trim.chars().filter(|c| c.is_digit(10)).collect();
-                            if let Ok(digits) = digits_only.parse::<u64>() {
+                            
+                            // Extract the first contiguous sequence of digits
+                            // This handles formats like "8192", "8192 MB", "VRAM: 8192", etc.
+                            let mut digits_str = String::new();
+                            let mut found_digit = false;
+                            
+                            for ch in vram_trim.chars() {
+                                if ch.is_digit(10) {
+                                    digits_str.push(ch);
+                                    found_digit = true;
+                                } else if found_digit {
+                                    // Stop at the first non-digit after we've found digits
+                                    break;
+                                }
+                            }
+                            
+                            if let Ok(digits) = digits_str.parse::<u64>() {
                                 // Many sysfs values are bytes; if value seems large assume bytes
                                 if digits > (16 * 1024 * 1024) { // >16MB in bytes
                                     return Ok(digits / (1024 * 1024));
