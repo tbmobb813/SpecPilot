@@ -17,7 +17,6 @@ SpecPilot is now fully scaffolded and ready for development. Here's what was bui
 
 ## 📁 File Structure
 
-```
 SpecPilot/
 ├── 📄 Documentation
 │   ├── README.md           (5.3 KB) - Project overview and setup
@@ -65,7 +64,6 @@ SpecPilot/
         ├── unit/
         ├── integration/
         └── helpers/
-```
 
 ---
 
@@ -87,7 +85,6 @@ SpecPilot/
 
 **Architecture Pattern:**
 
-```
 ┌─────────────────────────────────────────┐
 │           main.rs (Entry Point)          │
 │  - Initializes Tauri                     │
@@ -116,18 +113,17 @@ SpecPilot/
 │  Linux   │      │ Windows  │
 │ Detection│      │Detection │
 └──────────┘      └──────────┘
-```
 
 **Detection Capabilities:**
 
-| Component     | Linux Method                          | Windows Method    |
-|---------------|---------------------------------------|-------------------|
-| **CPU**       | `/proc/cpuinfo`, `lscpu`              | WMI (Win32_Processor) |
-| **GPU**       | `lspci`, `nvidia-smi`, `rocm-smi`     | WMI (Win32_VideoController) |
-| **Memory**    | `/proc/meminfo`, `dmidecode`          | GlobalMemoryStatusEx API |
-| **Storage**   | `df`, `lsblk`                         | WMI (Win32_LogicalDisk) |
-| **OS**        | `/etc/os-release`, `/proc/version`    | WMI (Win32_OperatingSystem) |
-| **Graphics API** | `vulkaninfo`, `glxinfo`            | DirectX APIs |
+| Component        | Linux Method                          | Windows Method              |
+|------------------|---------------------------------------|-----------------------------|
+| **CPU**          | `/proc/cpuinfo`, `lscpu`              | WMI (Win32_Processor)       |
+| **GPU**          | `lspci`, `nvidia-smi`, `rocm-smi`     | WMI (Win32_VideoController) |
+| **Memory**       | `/proc/meminfo`, `dmidecode`          | GlobalMemoryStatusEx API    |
+| **Storage**      | `df`, `lsblk`                         | WMI (Win32_LogicalDisk)     |
+| **OS**           | `/etc/os-release`, `/proc/version`    | WMI (Win32_OperatingSystem) |
+| **Graphics API** | `vulkaninfo`, `glxinfo`               | DirectX APIs                |
 
 ### Frontend (React + TypeScript)
 
@@ -140,7 +136,6 @@ SpecPilot/
 
 **Component Hierarchy:**
 
-```
 App.tsx
 └── HardwareScan.tsx
     ├── Scan Button
@@ -152,7 +147,6 @@ App.tsx
         ├── Storage Section
         ├── OS Section
         └── Graphics API Section
-```
 
 **State Management:**
 
@@ -342,7 +336,7 @@ wmi = "0.13"
 
 | Command                | Description                     | Output            |
 |------------------------|---------------------------------|-------------------|
-| `npm run tauri dev`    | Development mode with hot-reload| N/A (dev server) |
+| `npm run tauri dev`    | Development mode with hot-reload| N/A (dev server)  |
 | `npm run tauri build`  | Production build                | Platform-specific installer |
 | `cargo build`          | Build Rust backend only         | Debug binary      |
 | `cargo build --release`| Optimized Rust build            | Release binary    |
@@ -676,4 +670,4 @@ You now have:
 **Lines of Code:** 1,346
 **Documentation:** 1,600+ lines
 
-*Last updated: 2026-01-30*
+Last updated: 2026-01-30

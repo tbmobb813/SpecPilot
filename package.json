@@ -17,7 +17,10 @@
     "scrape:pcgw": "node scripts/scrapers/pcgamingwiki.js",
     "sync:protondb": "node scripts/sync/protondb.js",
     "sync:steamdeck": "node scripts/sync/steamdeck.js",
-    "scrape:requirements": "node scripts/scrapers/steam_requirements.js"
+    "sync:anticheat": "node scripts/sync/anticheat.js",
+    "scrape:requirements": "node scripts/scrapers/steam_requirements.js",
+    "db:seed": "node scripts/seed_database.js",
+    "db:seed:quick": "node scripts/seed_database.js --games-only"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",

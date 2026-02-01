@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::intelligence::rules::{VerdictEngine, HardwareRequirement, VerdictStatus};
-    use crate::hardware::common::{HardwareProfile, CpuInfo, GpuInfo, MemoryInfo, StorageInfo, OsInfo, GraphicsApiSupport, CpuTier, GpuTier, GpuVendor, StorageType};
+    use crate::hardware::{HardwareProfile, CpuInfo, GpuInfo, MemoryInfo, StorageInfo, OsInfo, GraphicsApiSupport, CpuTier, GpuTier, GpuVendor, StorageType};
     use crate::intelligence::narrative::{NarrativeBlock, NarrativeBlockType, compose};
     use crate::intelligence::bottleneck::Bottleneck;
 
