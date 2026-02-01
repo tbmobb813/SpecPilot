@@ -1,7 +1,7 @@
 use crate::hardware::*;
 use crate::intelligence::bottleneck::{Bottleneck, BottleneckType};
 use crate::intelligence::narrative::{NarrativeBlock, NarrativeBlockType, compose};
-use crate::intelligence::proton::{LinuxCompatibility, ProtonRating, AntiCheatStatus};
+use crate::intelligence::proton::{LinuxCompatibility, ProtonRating};
 
 pub struct VerdictEngine {}
 
@@ -368,7 +368,7 @@ fn version_lt(a: &str, b: &str) -> bool {
 
 // Estimate CPU score from hardware profile. This is a heuristic mapping used
 // for rules where exact benchmark data is unavailable.
-fn estimate_cpu_score(hw: &crate::hardware::common::HardwareProfile) -> u32 {
+fn estimate_cpu_score(hw: &crate::hardware::HardwareProfile) -> u32 {
     // Prefer seeded lookup table when available
     if let Some(s) = crate::intelligence::lookup::get_cpu_score_for_model(&hw.cpu.model) {
         return s;
@@ -378,32 +378,32 @@ fn estimate_cpu_score(hw: &crate::hardware::common::HardwareProfile) -> u32 {
     let base = hw.cpu.base_clock.max(0.5); // GHz
     let cores = hw.cpu.cores.max(1) as f32;
     let tier_multiplier = match hw.cpu.tier {
-        crate::hardware::common::CpuTier::Budget => 0.6,
-        crate::hardware::common::CpuTier::Entry => 0.8,
-        crate::hardware::common::CpuTier::Mainstream => 1.0,
-        crate::hardware::common::CpuTier::Performance => 1.2,
-        crate::hardware::common::CpuTier::Enthusiast => 1.4,
-        crate::hardware::common::CpuTier::Workstation => 1.5,
+        crate::hardware::CpuTier::Budget => 0.6,
+        crate::hardware::CpuTier::Entry => 0.8,
+        crate::hardware::CpuTier::Mainstream => 1.0,
+        crate::hardware::CpuTier::Performance => 1.2,
+        crate::hardware::CpuTier::Enthusiast => 1.4,
+        crate::hardware::CpuTier::Workstation => 1.5,
     };
     let score = base * cores * 2000.0 * tier_multiplier; // scale to ~0-20000
     score as u32
 }
 
 // Estimate GPU score from hardware profile. Uses tier baseline plus small VRAM bonus.
-fn estimate_gpu_score(hw: &crate::hardware::common::HardwareProfile) -> u32 {
+fn estimate_gpu_score(hw: &crate::hardware::HardwareProfile) -> u32 {
     // Prefer seeded lookup table when available
     if let Some(s) = crate::intelligence::lookup::get_gpu_score_for_model(&hw.gpu.model) {
         return s;
     }
 
     let tier_base = match hw.gpu.tier {
-        crate::hardware::common::GpuTier::Integrated => 500,
-        crate::hardware::common::GpuTier::Budget => 2000,
-        crate::hardware::common::GpuTier::Entry => 4000,
-        crate::hardware::common::GpuTier::Mainstream => 7000,
-        crate::hardware::common::GpuTier::Performance => 9000,
-        crate::hardware::common::GpuTier::Enthusiast => 11000,
-        crate::hardware::common::GpuTier::Ultra => 14000,
+        crate::hardware::GpuTier::Integrated => 500,
+        crate::hardware::GpuTier::Budget => 2000,
+        crate::hardware::GpuTier::Entry => 4000,
+        crate::hardware::GpuTier::Mainstream => 7000,
+        crate::hardware::GpuTier::Performance => 9000,
+        crate::hardware::GpuTier::Enthusiast => 11000,
+        crate::hardware::GpuTier::Ultra => 14000,
     };
     // VRAM contribution (capped)
     let vram_bonus = ((hw.gpu.vram as f32 / 1024.0) * 1500.0) as u32; // per GB

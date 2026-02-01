@@ -418,15 +418,15 @@ fn parse_pci_resource_vram(content: &str) -> Option<u64> {
                 // Only consider sizes > 256MB as potential VRAM
                 if size > 256 * 1024 * 1024 && size > max_size {
                     max_size = size;
+                }
             }
         }
     }
 
     if max_size > 0 {
-        Some(max_size / (1024 * 1024)) // Bytes to MB
-    } else {
-        None
+        return Some(max_size / (1024 * 1024)); // Bytes to MB
     }
+    None
 }
 
 /// Parse radeontop output for VRAM info
@@ -632,11 +632,6 @@ fn test_detect_vram_with_runner_amd() {
 #[test]
 fn test_parse_pci_resource_vram() {
     // Simulated PCI resource file content with 8GB VRAM BAR
-    let _content = "0x0000000000000000 0x0000000000000000 0x0000000000000000
-0x00000000c0000000 0x00000000cfffffff 0x0000000000040200
-0x0000000080000000 0x000000009fffffff 0x000000000014220c";
-    // Second line is ~256MB (display), third is ~512MB
-    // Let's use a more realistic example with 8GB
     let content_8gb = "0x0000000000000000 0x0000000000000000 0x0000000000000000
 0x0000004000000000 0x00000041ffffffff 0x000000000014220c";
     // 0x41ffffffff - 0x4000000000 = 0x1ffffffff = 8589934591 bytes = ~8GB

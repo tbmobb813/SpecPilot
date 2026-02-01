@@ -266,7 +266,14 @@ impl LinuxCompatibility {
             return 0.0;
         }
 
-        let mut confidence = self.proton.rating.confidence_modifier();
+        let base_confidence = self.proton.rating.confidence_modifier();
+
+        // If game is borked, no amount of reports will help
+        if base_confidence == 0.0 {
+            return 0.0;
+        }
+
+        let mut confidence = base_confidence;
 
         // Boost confidence if we have many reports
         if self.proton.total_reports > 100 {

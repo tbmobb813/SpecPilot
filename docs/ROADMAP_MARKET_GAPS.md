@@ -1,6 +1,6 @@
 # SpecPilot: Addressing Market Gaps
 
-*Actionable features and improvements based on market research findings*
+## Actionable features and improvements based on market research findings
 
 ---
 
@@ -12,7 +12,7 @@ This document maps **consumer pain points** (from MARKET_RESEARCH.md) to **speci
 
 ## Gap 1: Steam Deck Verified Labels Are Unreliable
 
-### The Problem
+### The Problem (Gap 1)
 
 - Valve's "Verified" games frequently don't work (Apex Legends, God of War, DOOM 2016)
 - Ratings go stale when devs push breaking updates
@@ -27,12 +27,10 @@ This document maps **consumer pain points** (from MARKET_RESEARCH.md) to **speci
 
 **Implementation:**
 
-```
 - Add `community_deck_reports` table tracking user-submitted Deck experiences
 - Weight community reports against official Valve status
 - Display "Verified but community reports issues" warnings
 - Show recency of last community report vs Valve verification date
-```
 
 **Files to modify:**
 
@@ -46,12 +44,10 @@ This document maps **consumer pain points** (from MARKET_RESEARCH.md) to **speci
 
 **Implementation:**
 
-```
 - Track `valve_verified_date` in steamdeck_compatibility table
 - Track `last_game_update` from Steam API
 - If game updated after verification: show warning "Game updated since Deck verification"
 - Prioritize community reports for recently-updated games
-```
 
 #### 1.3 "Known Issues" Database (MEDIUM PRIORITY)
 
@@ -59,12 +55,10 @@ This document maps **consumer pain points** (from MARKET_RESEARCH.md) to **speci
 
 **Implementation:**
 
-```
 - Create `known_issues` table: game_id, issue_type, description, workaround, reported_date
 - Issue types: input_not_working, crashes_on_suspend, performance_issues, audio_problems
 - Scrape Steam Deck discussions for common complaints
 - Display issues prominently in verdict narrative
-```
 
 ---
 
@@ -131,7 +125,7 @@ enum LinuxBottleneck {
 
 ## Gap 3: ProtonDB Has No Hardware Matching
 
-### The Problem
+### The Problem (Gap 3)
 
 - ProtonDB tells you IF a game works on Linux
 - But not if YOUR HARDWARE can run it
@@ -191,7 +185,7 @@ fn evaluate_proton_compatibility(&self, game_id: u64) -> ProtonFactor {
 
 ## Gap 4: Users Must Check 4+ Fragmented Sources
 
-### The Problem
+### The Problem (Gap 4)
 
 - Current workflow: ProtonDB → Deck Verified → PCGamingWiki → Anti-cheat DB → Manual comparison
 - No single source of truth
@@ -206,7 +200,6 @@ fn evaluate_proton_compatibility(&self, game_id: u64) -> ProtonFactor {
 
 **New verdict display:**
 
-```
 ┌─────────────────────────────────────────────────────────┐
 │ Cyberpunk 2077                                          │
 ├─────────────────────────────────────────────────────────┤
@@ -221,7 +214,6 @@ fn evaluate_proton_compatibility(&self, game_id: u64) -> ProtonFactor {
 ├─────────────────────────────────────────────────────────┤
 │ Community: 73% report stable 60fps at 1080p Medium      │
 └─────────────────────────────────────────────────────────┘
-```
 
 #### 4.2 Source Attribution (MEDIUM PRIORITY)
 
@@ -254,7 +246,7 @@ struct ConfidenceFactors {
 
 ## Gap 5: Anti-Cheat Is a Hard Blocker
 
-### The Problem
+### The Problem( Gap 5)
 
 - Destiny 2, Fortnite, recent CoD titles don't work on Linux
 - Users waste time checking requirements for fundamentally incompatible games
@@ -314,7 +306,7 @@ if anti_cheat_status == "denied" || anti_cheat_status == "broken" {
 
 ## Gap 6: No Browser Extension for Steam Store
 
-### The Problem
+### The Problem( Gap 6)
 
 - Users browse Steam store, see a game, want to know "can I run this?"
 - Must leave Steam, open SpecPilot, search for game
@@ -359,7 +351,7 @@ if anti_cheat_status == "denied" || anti_cheat_status == "broken" {
 
 ## Gap 7: No Integration with Existing Linux Gaming Tools
 
-### The Problem
+### The Problem( Gap 7)
 
 - Lutris, Heroic Games Launcher are popular
 - Users want compatibility info BEFORE downloading
@@ -412,7 +404,7 @@ specpilot check --file game-ids.txt --format json
 
 ## Gap 8: Existing Tools Have Poor Hardware Detection
 
-### The Problem
+### The Problem(Gap 8)
 
 - Can You Run It often misreads specs (Nvidia Optimus, integrated graphics)
 - Browser plugins are distrusted
@@ -471,7 +463,7 @@ Show users: "GPU detected via nvidia-smi (high confidence)" vs "GPU estimated fr
 - They want: "What settings? What FPS?"
 - Competitors don't provide this
 
-### SpecPilot Solutions
+### SpecPilot Solutions: Performance Expectations
 
 #### 9.1 FPS Estimation (HIGH PRIORITY - Phase 2)
 
@@ -563,7 +555,7 @@ struct PerformanceEstimate {
 ### Critical (Block MVP - Do First)
 
 | Feature | Effort | Impact |
-|---------|--------|--------|
+| --------- | -------- | -------- |
 | Fix AMD GPU VRAM detection | 4-8 hrs | Enables accurate verdicts for AMD users |
 | Integrate ProtonDB into verdicts | 1-2 days | Core differentiator |
 | Anti-cheat database integration | 2-3 days | Prevents wasted user time |
@@ -572,7 +564,7 @@ struct PerformanceEstimate {
 ### High Priority (MVP Quality)
 
 | Feature | Effort | Impact |
-|---------|--------|--------|
+| --------- | -------- | -------- |
 | Unified verdict dashboard | 3-4 days | Key UX differentiator |
 | Confidence scoring | 2 days | Builds user trust |
 | Linux-specific bottleneck detection | 2 days | Addresses core audience needs |
@@ -614,7 +606,7 @@ struct PerformanceEstimate {
 ## Success Metrics for Gap Coverage
 
 | Gap | Metric | Target |
-|-----|--------|--------|
+| ----- | -------- | -------- |
 | Deck Verified unreliable | User reports of "verified but broken" decrease | <5% of Deck verdicts disputed |
 | No Linux support | Linux user adoption | 80%+ of users on Linux |
 | ProtonDB no hardware match | Users report "verdict matched experience" | 90%+ accuracy |

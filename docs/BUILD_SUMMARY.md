@@ -336,7 +336,7 @@ wmi = "0.13"
 
 | Command                | Description                     | Output            |
 |------------------------|---------------------------------|-------------------|
-| `npm run tauri dev`    | Development mode with hot-reload| N/A (dev server) |
+| `npm run tauri dev`    | Development mode with hot-reload| N/A (dev server)  |
 | `npm run tauri build`  | Production build                | Platform-specific installer |
 | `cargo build`          | Build Rust backend only         | Debug binary      |
 | `cargo build --release`| Optimized Rust build            | Release binary    |
