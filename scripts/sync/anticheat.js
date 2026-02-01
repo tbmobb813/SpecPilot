@@ -151,23 +151,34 @@ async function syncAntiCheat(options = {}) {
       // Get Linux status
       const status = normalizeStatus(game.status);
 
-      // Build notes from updates array
+      // Build notes from updates array (sanitize undefined values)
       let notes = '';
-      if (game.updates && game.updates.length > 0) {
-        notes = game.updates.map(u => `[${u.date}] ${u.name}`).join('; ');
+      if (game.updates && Array.isArray(game.updates) && game.updates.length > 0) {
+        notes = game.updates
+          .filter(u => u && (u.date || u.name))
+          .map(u => `[${u.date || 'unknown'}] ${u.name || 'update'}`)
+          .join('; ');
       }
-      if (game.notes) {
+      if (game.notes && typeof game.notes === 'string') {
         notes = notes ? `${notes}; ${game.notes}` : game.notes;
+      }
+
+      // Sanitize source_url - handle undefined slug/name
+      let sourceUrl = null;
+      if (game.url && typeof game.url === 'string') {
+        sourceUrl = game.url;
+      } else if (game.slug || game.name) {
+        sourceUrl = `https://areweanticheatyet.com/game/${encodeURIComponent(game.slug || game.name || 'unknown')}`;
       }
 
       const record = {
         steam_id: steamId,
-        game_name: game.name || 'Unknown',
+        game_name: (game.name && typeof game.name === 'string') ? game.name : 'Unknown',
         anti_cheat_type: normalizeAntiCheat(primaryAntiCheat),
         linux_status: status,
-        notes: notes || null,
+        notes: (notes && notes.length > 0) ? notes : null,
         source: 'areweanticheatyet',
-        source_url: game.url || `https://areweanticheatyet.com/game/${encodeURIComponent(game.slug || game.name)}`,
+        source_url: sourceUrl,
         last_updated: new Date().toISOString()
       };
 

@@ -10,6 +10,8 @@ interface GameResult {
   header_image: string | null;
   protondb_rating: string | null;
   deck_status: string | null;
+  anti_cheat_type: string | null;
+  anti_cheat_status: string | null;  // "supported", "denied", "broken", "unknown"
   verdict: VerdictResult | null;
 }
 
@@ -49,6 +51,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>('all');
   const [genreFilter, setGenreFilter] = useState<string>('all');
+  const [hideAntiCheatBlocked, setHideAntiCheatBlocked] = useState(false);
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
 
   // Load all games on mount and whenever `hardwareProfile` changes so
@@ -186,15 +189,20 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       );
     }
 
+    // Anti-cheat filter
+    if (hideAntiCheatBlocked) {
+      filtered = filtered.filter(g => !isAntiCheatBlocked(g));
+    }
+
     setFilteredGames(filtered);
-  }, [games, searchQuery, verdictFilter, genreFilter, hardwareProfile]);
+  }, [games, searchQuery, verdictFilter, genreFilter, hideAntiCheatBlocked, hardwareProfile]);
 
   // Call applyFilters whenever inputs or the callback identity change.
   // `applyFilters` depends on `hardwareProfile`, so include it indirectly
   // by depending on the stable `applyFilters` reference.
   useEffect(() => {
     applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
+  }, [games, searchQuery, verdictFilter, genreFilter, hideAntiCheatBlocked, applyFilters]);
 
   const checkGameCompatibility = async (game: GameResult) => {
     if (!hardwareProfile) {
@@ -295,6 +303,23 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     }
   };
 
+  const getAntiCheatColor = (status: string | null): string => {
+    switch (status?.toLowerCase()) {
+      case 'supported':
+        return '#22c55e';
+      case 'denied':
+      case 'broken':
+        return '#ef4444';
+      default:
+        return '#6b7280';
+    }
+  };
+
+  const isAntiCheatBlocked = (game: GameResult): boolean => {
+    const status = game.anti_cheat_status?.toLowerCase();
+    return status === 'denied' || status === 'broken';
+  };
+
   // Group games by verdict
   const groupedGames = {
     can_run: filteredGames.filter(g =>
@@ -333,6 +358,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
           getVerdictLabel={getVerdictLabel}
           getProtonColor={getProtonColor}
           getDeckColor={getDeckColor}
+          getAntiCheatColor={getAntiCheatColor}
+          isAntiCheatBlocked={isAntiCheatBlocked}
         />
       </div>
     );
@@ -389,6 +416,17 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
           </select>
         </div>
 
+        <div className="filter-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={hideAntiCheatBlocked}
+              onChange={(e) => setHideAntiCheatBlocked(e.target.checked)}
+            />
+            Hide Anti-Cheat Blocked
+          </label>
+        </div>
+
         <div className="filter-stats">
           Showing {filteredGames.length} of {games.length} games
         </div>
@@ -408,6 +446,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
             />
           )}
 
@@ -422,6 +462,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
             />
           )}
 
@@ -436,6 +478,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
               collapsed={true}
             />
           )}
@@ -451,6 +495,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
               collapsed={true}
             />
           )}
@@ -469,6 +515,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
             />
           ))}
         </div>
@@ -499,6 +547,8 @@ interface GameSectionProps {
   getVerdictLabel: (status: string) => string;
   getProtonColor: (rating: string) => string;
   getDeckColor: (status: string) => string;
+  getAntiCheatColor: (status: string | null) => string;
+  isAntiCheatBlocked: (game: GameResult) => boolean;
 }
 
 function GameSection({
@@ -546,6 +596,8 @@ interface GameCardProps {
   getVerdictLabel: (status: string) => string;
   getProtonColor: (rating: string) => string;
   getDeckColor: (status: string) => string;
+  getAntiCheatColor: (status: string | null) => string;
+  isAntiCheatBlocked: (game: GameResult) => boolean;
 }
 
 function GameCard({
@@ -557,12 +609,23 @@ function GameCard({
   getVerdictLabel,
   getProtonColor,
   getDeckColor,
+  getAntiCheatColor,
+  isAntiCheatBlocked,
 }: GameCardProps) {
+  const blocked = isAntiCheatBlocked(game);
+
   return (
     <div
-      className={`game-card ${checking ? 'checking' : ''}`}
+      className={`game-card ${checking ? 'checking' : ''} ${blocked ? 'blocked' : ''}`}
       onClick={() => !checking && onSelect(game)}
     >
+      {/* Anti-cheat blocked banner */}
+      {blocked && (
+        <div className="blocked-banner">
+          Anti-Cheat Blocked: {game.anti_cheat_type}
+        </div>
+      )}
+
       <div className="game-info">
         <h4 className="game-name">{game.name}</h4>
         <div className="game-meta">
@@ -572,6 +635,17 @@ function GameCard({
       </div>
 
       <div className="game-badges">
+        {/* Anti-cheat badge (show if has anti-cheat, even if supported) */}
+        {game.anti_cheat_type && (
+          <span
+            className="badge anticheat-badge"
+            style={{ backgroundColor: getAntiCheatColor(game.anti_cheat_status) }}
+            title={`Anti-cheat: ${game.anti_cheat_type} (${game.anti_cheat_status || 'unknown'})`}
+          >
+            {blocked ? '🚫' : '🛡️'} {game.anti_cheat_type}
+          </span>
+        )}
+
         {game.verdict && (
           <span
             className="badge verdict-badge"
@@ -613,6 +687,8 @@ interface GameDetailProps {
   getVerdictLabel: (status: string) => string;
   getProtonColor: (rating: string) => string;
   getDeckColor: (status: string) => string;
+  getAntiCheatColor: (status: string | null) => string;
+  isAntiCheatBlocked: (game: GameResult) => boolean;
 }
 
 function GameDetail({
@@ -623,7 +699,10 @@ function GameDetail({
   getVerdictLabel,
   getProtonColor,
   getDeckColor,
+  getAntiCheatColor,
+  isAntiCheatBlocked,
 }: GameDetailProps) {
+  const blocked = isAntiCheatBlocked(game);
   return (
     <div className="game-detail">
       <button className="back-button" onClick={onBack}>
@@ -697,6 +776,30 @@ function GameDetail({
               <p className="source-info">Valve's official verification</p>
             </div>
           )}
+
+          {/* Anti-Cheat Status */}
+          {game.anti_cheat_type && (
+            <div className="compat-card">
+              <h4>Anti-Cheat</h4>
+              <div
+                className="verdict-status"
+                style={{ backgroundColor: getAntiCheatColor(game.anti_cheat_status) }}
+              >
+                {blocked ? '🚫' : '🛡️'} {game.anti_cheat_type}
+              </div>
+              <p className="source-info">
+                {blocked
+                  ? `Linux support: ${game.anti_cheat_status} (blocked)`
+                  : `Linux support: ${game.anti_cheat_status || 'unknown'}`
+                }
+              </p>
+              {blocked && (
+                <p className="source-info" style={{ color: '#ef4444', marginTop: '0.5rem' }}>
+                  This game cannot run on Linux due to anti-cheat restrictions
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Requirements */}
@@ -767,6 +870,15 @@ function GameDetail({
         >
           View on ProtonDB →
         </a>
+        {game.anti_cheat_type && (
+          <a
+            href="https://areweanticheatyet.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View Anti-Cheat Status →
+          </a>
+        )}
       </div>
     </div>
   );

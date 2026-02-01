@@ -668,6 +668,23 @@
   cursor: not-allowed;
 }
 
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #555;
+  font-weight: 600;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #667eea;
+}
+
 .filter-stats {
   color: #888;
   font-size: 0.85rem;
@@ -757,6 +774,38 @@
 .game-card.checking {
   opacity: 0.7;
   pointer-events: none;
+}
+
+.game-card.blocked {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.game-card.blocked:hover {
+  border-color: #dc2626;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+.blocked-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #ef4444;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  text-align: center;
+  border-radius: 10px 10px 0 0;
+}
+
+.game-card.blocked .game-info {
+  margin-top: 1.5rem;
+}
+
+.anticheat-badge {
+  text-transform: none;
 }
 
 .game-info {
