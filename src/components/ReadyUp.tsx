@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeTauri } from '../api/tauri';
 
 interface CheckAction {
   label: string;
@@ -30,7 +30,7 @@ export function ReadyUp() {
     setLoading(true);
     setError(null);
     try {
-      const result = await invoke<ReadyUpReport>('run_readyup_checks');
+      const result = await invokeTauri<ReadyUpReport>('run_readyup_checks');
       setReport(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

@@ -409,11 +409,14 @@ fn generate_tier_fallback_verdict(hardware: &HardwareProfile) -> VerdictResult {
     let cpu_tier = hardware.cpu.tier as u8;
     let min_tier = gpu_tier.min(cpu_tier);
 
+    // Tier values: 1=Budget/Integrated, 2=Entry, 3=Mainstream, 4=Performance,
+    //              5=Enthusiast, 6=Workstation/Enthusiast, 7=Ultra
     let (status, summary) = match min_tier {
         6..=7 => ("likely_good", "Based on your hardware tier, this game should run well"),
         4..=5 => ("likely_playable", "Based on your hardware tier, this game should be playable"),
         2..=3 => ("uncertain", "Based on your hardware tier, performance may vary"),
-        _ => ("uncertain", "Unable to estimate performance without requirements data"),
+        1 => ("likely_challenging", "Based on your hardware tier, this game may be demanding for your system"),
+        _ => ("unknown", "Unable to determine hardware tier"),
     };
 
     VerdictResult {

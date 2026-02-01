@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeTauri } from '../api/tauri';
 import { HardwareProfile } from '../api/hardware';
 
 interface GameResult {
@@ -62,7 +62,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     setError(null);
 
     try {
-      const results: GameResult[] = await invoke('browse_games', {
+      const results: GameResult[] = await invokeTauri('browse_games', {
         filterVerdict: null,
         filterGenre: null,
         limit: 500,
@@ -96,7 +96,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
           const batchResults = await Promise.all(
             batch.map(async (game) => {
               try {
-                const verdict: VerdictResult = await invoke('check_game_compatibility', {
+                const verdict: VerdictResult = await invokeTauri('check_game_compatibility', {
                   steamId: game.steam_id,
                   hardware: hardwareProfile,
                 });
