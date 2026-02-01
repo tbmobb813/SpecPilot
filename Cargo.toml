@@ -2,7 +2,7 @@
 members = ["src-tauri"]
 resolver = "2"
 
-# Root workspace Cargo.toml so `cargo` invoked at repository root
-# will operate on the `src-tauri` crate. This prevents CI failures
-# when workflows or external actions run `cargo` from the repo root.
+# Root workspace Cargo.toml. This allows cargo commands run from the
+# repository root (e.g., in CI) to automatically operate on the
+# src-tauri crate member.
 
