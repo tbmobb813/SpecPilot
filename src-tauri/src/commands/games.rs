@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 // removed unused import to silence warnings
 use crate::hardware::HardwareProfile;
 use crate::db::get_db_pool;
+use sqlx::Row;
+// Note: avoid importing `crate::intelligence::*` here to keep module resolution simple.
 
 // Use shared DB pool from `db` module (see src/db.rs)
 
@@ -14,6 +16,8 @@ pub struct GameResult {
     pub header_image: Option<String>,
     pub protondb_rating: Option<String>,
     pub deck_status: Option<String>,
+    pub anti_cheat_type: Option<String>,
+    pub anti_cheat_status: Option<String>,  // "supported", "denied", "broken", "unknown"
     pub verdict: Option<String>,  // Pre-computed if hardware provided
 }
 
@@ -45,12 +49,16 @@ struct GameRow {
     header_image: Option<String>,
     protondb_rating: Option<String>,
     deck_status: Option<String>,
+    anti_cheat_type: Option<String>,
+    anti_cheat_status: Option<String>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, sqlx::FromRow)]
 struct GameRequirementsRow {
+    id: i64,
     name: String,
+    steam_id: Option<i64>,
     min_cpu_cores: Option<i32>,
     min_cpu_clock_ghz: Option<f64>,
     min_cpu_text: Option<String>,
@@ -76,10 +84,12 @@ pub async fn search_games(query: String) -> Result<Vec<GameResult>, String> {
 
     let rows: Vec<GameRow> = sqlx::query_as(
         "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                p.protondb_rating, d.deck_status
+                p.protondb_rating, d.deck_status,
+                a.anti_cheat_type, a.linux_status as anti_cheat_status
          FROM games g
          LEFT JOIN proton_compatibility p ON p.game_id = g.id
          LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+         LEFT JOIN anti_cheat_status a ON a.steam_id = g.steam_id
          WHERE LOWER(g.name) LIKE $1
          ORDER BY
            CASE WHEN g.requirements_parsed = 1 THEN 0 ELSE 1 END,
@@ -99,6 +109,8 @@ pub async fn search_games(query: String) -> Result<Vec<GameResult>, String> {
         header_image: row.header_image,
         protondb_rating: row.protondb_rating,
         deck_status: row.deck_status,
+        anti_cheat_type: row.anti_cheat_type,
+        anti_cheat_status: row.anti_cheat_status,
         verdict: None,
     }).collect();
 
@@ -133,10 +145,12 @@ pub async fn browse_games(
         match parsed_mode {
             "all" => sqlx::query_as(
                 "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                        p.protondb_rating, d.deck_status
+                        p.protondb_rating, d.deck_status,
+                        a.anti_cheat_type, a.linux_status as anti_cheat_status
                  FROM games g
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 LEFT JOIN anti_cheat_status a ON a.steam_id = g.steam_id
                  WHERE g.genre LIKE $1
                  ORDER BY g.name
                  LIMIT $2
@@ -150,10 +164,12 @@ pub async fn browse_games(
             .map_err(|e| format!("Query failed: {}", e))?,
             "unparsed" => sqlx::query_as(
                 "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                        p.protondb_rating, d.deck_status
+                        p.protondb_rating, d.deck_status,
+                        a.anti_cheat_type, a.linux_status as anti_cheat_status
                  FROM games g
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 LEFT JOIN anti_cheat_status a ON a.steam_id = g.steam_id
                  WHERE (g.requirements_parsed IS NULL OR g.requirements_parsed != 1)
                    AND g.genre LIKE $1
                  ORDER BY g.name
@@ -168,10 +184,12 @@ pub async fn browse_games(
             .map_err(|e| format!("Query failed: {}", e))?,
             _ => sqlx::query_as(
                 "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                        p.protondb_rating, d.deck_status
+                        p.protondb_rating, d.deck_status,
+                        a.anti_cheat_type, a.linux_status as anti_cheat_status
                  FROM games g
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 LEFT JOIN anti_cheat_status a ON a.steam_id = g.steam_id
                  WHERE g.requirements_parsed = 1
                    AND g.genre LIKE $1
                  ORDER BY g.name
@@ -190,10 +208,12 @@ pub async fn browse_games(
         match parsed_mode {
             "all" => sqlx::query_as(
                 "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                        p.protondb_rating, d.deck_status
+                        p.protondb_rating, d.deck_status,
+                        a.anti_cheat_type, a.linux_status as anti_cheat_status
                  FROM games g
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 LEFT JOIN anti_cheat_status a ON a.steam_id = g.steam_id
                  ORDER BY g.name
                  LIMIT $1
                  OFFSET $2",
@@ -205,10 +225,12 @@ pub async fn browse_games(
             .map_err(|e| format!("Query failed: {}", e))?,
             "unparsed" => sqlx::query_as(
                 "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                        p.protondb_rating, d.deck_status
+                        p.protondb_rating, d.deck_status,
+                        a.anti_cheat_type, a.linux_status as anti_cheat_status
                  FROM games g
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 LEFT JOIN anti_cheat_status a ON a.steam_id = g.steam_id
                  WHERE (g.requirements_parsed IS NULL OR g.requirements_parsed != 1)
                  ORDER BY g.name
                  LIMIT $1
@@ -221,10 +243,12 @@ pub async fn browse_games(
             .map_err(|e| format!("Query failed: {}", e))?,
             _ => sqlx::query_as(
                 "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                        p.protondb_rating, d.deck_status
+                        p.protondb_rating, d.deck_status,
+                        a.anti_cheat_type, a.linux_status as anti_cheat_status
                  FROM games g
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+                 LEFT JOIN anti_cheat_status a ON a.steam_id = g.steam_id
                  WHERE g.requirements_parsed = 1
                  ORDER BY g.name
                  LIMIT $1
@@ -246,6 +270,8 @@ pub async fn browse_games(
         header_image: row.header_image,
         protondb_rating: row.protondb_rating,
         deck_status: row.deck_status,
+        anti_cheat_type: row.anti_cheat_type,
+        anti_cheat_status: row.anti_cheat_status,
         verdict: None,
     }).collect();
 
@@ -261,7 +287,7 @@ pub async fn check_game_compatibility(
 
     // Fetch game requirements
     let game: Option<GameRequirementsRow> = sqlx::query_as(
-        "SELECT name,
+        "SELECT id, steam_id, name,
                 min_cpu_cores, min_cpu_clock_ghz, min_cpu_text, min_ram_mb,
                 min_gpu_vram_mb, min_gpu_text, min_storage_gb,
                 rec_cpu_cores, rec_cpu_clock_ghz, rec_cpu_text, rec_ram_mb,
@@ -278,6 +304,60 @@ pub async fn check_game_compatibility(
         Some(g) => g,
         None => return Ok(generate_unknown_verdict()),
     };
+
+    // Fetch ProtonDB compatibility and anti-cheat status (if available)
+    let mut proton_rating_str = "unknown".to_string();
+    let mut proton_total_reports: i64 = 0;
+    // Query proton_compatibility by game_id (games.id)
+    if let Ok(row_opt) = sqlx::query("SELECT protondb_rating, total_reports FROM proton_compatibility WHERE game_id = ?")
+        .bind(game.id)
+        .fetch_optional(&pool)
+        .await
+    {
+        if let Some(row) = row_opt {
+            proton_rating_str = row.try_get::<Option<String>, _>("protondb_rating").ok().flatten().unwrap_or_else(|| "unknown".to_string());
+            proton_total_reports = row.try_get::<Option<i64>, _>("total_reports").ok().flatten().unwrap_or(0);
+        }
+    }
+
+    // anti-cheat by steam_id
+    let mut anti_cheat_type = "".to_string();
+    let mut anti_cheat_linux_status = "unknown".to_string();
+    if let Some(sid) = game.steam_id {
+        if let Ok(row_opt) = sqlx::query("SELECT anti_cheat_type, linux_status FROM anti_cheat_status WHERE steam_id = ?")
+            .bind(sid)
+            .fetch_optional(&pool)
+            .await
+        {
+            if let Some(row) = row_opt {
+                anti_cheat_type = row.try_get::<Option<String>, _>("anti_cheat_type").ok().flatten().unwrap_or_default();
+                anti_cheat_linux_status = row.try_get::<Option<String>, _>("linux_status").ok().flatten().unwrap_or("unknown".to_string());
+            }
+        }
+    }
+
+    // If anti-cheat blocks Linux (denied/broken) or Proton rating is Borked, return early as unplayable
+    let linux_blocking = anti_cheat_linux_status.to_lowercase().contains("denied") || anti_cheat_linux_status.to_lowercase().contains("broken");
+    if linux_blocking {
+        return Ok(VerdictResult {
+            status: "below_minimum".to_string(),
+            confidence: "high".to_string(),
+            summary: format!("Blocked by anti-cheat: {} ({})", anti_cheat_type, anti_cheat_linux_status),
+            details: vec![format!("AntiCheat: {} ({})", anti_cheat_type, anti_cheat_linux_status)],
+            min_requirements: None,
+            rec_requirements: None,
+        });
+    }
+    if proton_rating_str.to_lowercase() == "borked" {
+        return Ok(VerdictResult {
+            status: "below_minimum".to_string(),
+            confidence: "high".to_string(),
+            summary: "ProtonDB reports this game as Borked on Linux".to_string(),
+            details: vec![format!("ProtonDB rating: {} ({} reports)", proton_rating_str, proton_total_reports)],
+            min_requirements: None,
+            rec_requirements: None,
+        });
+    }
 
     
 
@@ -406,74 +486,116 @@ pub async fn check_game_compatibility(
         }
     }
 
-    // Determine verdict
-    let (status, summary, confidence) = if checks_performed == 0 {
-        (
-            "unknown".to_string(),
-            "No requirements data available for comparison".to_string(),
-            "low".to_string(),
-        )
+    // Determine verdict (hardware-first) and factor in ProtonDB adjustments
+    let (status, summary, mut conf_value) = if checks_performed == 0 {
+        ("unknown".to_string(), "No requirements data available for comparison".to_string(), 0.5_f32)
     } else if !meets_min {
         (
             "below_minimum".to_string(),
             format!("Your hardware does not meet the minimum requirements for {}", game.name),
-            if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
+            if checks_performed >= 2 { 0.35 } else { 0.2 },
         )
     } else if !meets_rec {
         (
             "meets_minimum".to_string(),
             format!("Your hardware meets minimum but not recommended specs for {}", game.name),
-            if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
+            if checks_performed >= 2 { 0.6 } else { 0.45 },
         )
     } else {
-            // Check if we significantly exceed recommended specs.
-            // Only consider a metric if the corresponding recommended value is present.
-            // Instead of requiring any single metric to be > 2x, compute an average ratio
-            // across all available metrics and require that average to be >= 2.0.
-            let mut total_ratio: f64 = 0.0;
-            let mut metrics_count: i32 = 0;
+        // Check if we significantly exceed recommended specs (average ratio >= 2.0)
+        let mut total_ratio: f64 = 0.0;
+        let mut metrics_count: i32 = 0;
 
-            if let Some(rec_ram) = game.rec_ram_mb {
-                if rec_ram > 0 {
-                    total_ratio += (user_ram_mb as f64) / (rec_ram as f64);
-                    metrics_count += 1;
-                }
+        if let Some(rec_ram) = game.rec_ram_mb {
+            if rec_ram > 0 {
+                total_ratio += (user_ram_mb as f64) / (rec_ram as f64);
+                metrics_count += 1;
             }
+        }
 
-            if let Some(rec_vram) = game.rec_gpu_vram_mb {
-                if rec_vram > 0 {
-                    total_ratio += (user_vram_mb as f64) / (rec_vram as f64);
-                    metrics_count += 1;
-                }
+        if let Some(rec_vram) = game.rec_gpu_vram_mb {
+            if rec_vram > 0 {
+                total_ratio += (user_vram_mb as f64) / (rec_vram as f64);
+                metrics_count += 1;
             }
+        }
 
-            if let Some(rec_cores) = game.rec_cpu_cores {
-                if rec_cores > 0 {
-                    total_ratio += (user_cpu_cores as f64) / (rec_cores as f64);
-                    metrics_count += 1;
-                }
+        if let Some(rec_cores) = game.rec_cpu_cores {
+            if rec_cores > 0 {
+                total_ratio += (user_cpu_cores as f64) / (rec_cores as f64);
+                metrics_count += 1;
             }
+        }
 
-            let exceeds = metrics_count > 0
-                && (total_ratio / metrics_count as f64) >= 2.0;
-            if exceeds {
-                (
-                    "exceeds_recommended".to_string(),
-                    format!("Your hardware exceeds recommended specs for {}", game.name),
-                    if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
-                )
+        let exceeds = metrics_count > 0 && (total_ratio / metrics_count as f64) >= 2.0;
+        if exceeds {
+            (
+                "exceeds_recommended".to_string(),
+                format!("Your hardware exceeds recommended specs for {}", game.name),
+                if checks_performed >= 2 { 0.9 } else { 0.7 },
+            )
+        } else {
+            (
+                "meets_recommended".to_string(),
+                format!("Your hardware meets recommended specs for {}", game.name),
+                if checks_performed >= 2 { 0.8 } else { 0.6 },
+            )
+        }
+    };
+
+    // Apply ProtonDB confidence modifiers and narrative hints
+    let pr = proton_rating_str.to_lowercase();
+    match pr.as_str() {
+        "platinum" => {
+            conf_value = (conf_value * 1.0).min(1.0);
+            details.push(format!("ProtonDB: Platinum ({} reports)", proton_total_reports));
+        }
+        "gold" => {
+            conf_value = (conf_value * 0.95).min(1.0);
+            details.push(format!("ProtonDB: Gold ({} reports)", proton_total_reports));
+        }
+        "silver" => {
+            conf_value = conf_value * 0.75;
+            details.push(format!("ProtonDB: Silver ({} reports) — may require tweaks", proton_total_reports));
+        }
+        "bronze" => {
+            conf_value = conf_value * 0.4;
+            details.push(format!("ProtonDB: Bronze ({} reports) — significant issues reported", proton_total_reports));
+        }
+        "borked" => {
+            // should have been short-circuited earlier, but handle defensively
+            return Ok(VerdictResult {
+                status: "below_minimum".to_string(),
+                confidence: "low".to_string(),
+                summary: "ProtonDB reports this game as Borked on Linux".to_string(),
+                details: vec![format!("ProtonDB rating: {} ({} reports)", proton_rating_str, proton_total_reports)],
+                min_requirements: Some(min_reqs),
+                rec_requirements: Some(rec_reqs),
+            });
+        }
+        _ => {
+            // Unknown or no data
+            if proton_total_reports > 0 {
+                details.push(format!("ProtonDB: {} ({} reports)", proton_rating_str, proton_total_reports));
+                conf_value = conf_value * 0.9;
             } else {
-                (
-                    "meets_recommended".to_string(),
-                    format!("Your hardware meets recommended specs for {}", game.name),
-                    if checks_performed >= 2 { "high" } else { "medium" }.to_string(),
-                )
+                details.push("ProtonDB: No reports available".to_string());
             }
-        };
+        }
+    }
+
+    // Map numeric confidence to label
+    let confidence_label = if conf_value >= 0.85 {
+        "high"
+    } else if conf_value >= 0.5 {
+        "medium"
+    } else {
+        "low"
+    };
 
     Ok(VerdictResult {
         status,
-        confidence,
+        confidence: confidence_label.to_string(),
         summary,
         details,
         min_requirements: Some(min_reqs),
@@ -599,10 +721,10 @@ mod tests {
         // Build a hardware profile that has more than minimum but there are no recommended values
         // Note: set_db_pool_for_tests already registered the pool, so no CWD change needed
         let hw = HardwareProfile {
-            cpu: CpuInfo { model: "TestCPU".into(), vendor: "TestVendor".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream },
-            gpu: GpuInfo { model: "TestGPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream },
-            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
-            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd },
+            cpu: CpuInfo { model: "TestCPU".into(), vendor: "TestVendor".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream, detection: Default::default() },
+            gpu: GpuInfo { model: "TestGPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd, detection: Default::default() },
             os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
             graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
         };
@@ -674,10 +796,10 @@ mod tests {
         // No process-wide cwd changes required; tests register the pool directly.
 
         let hw = HardwareProfile {
-            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 8, threads: 8, base_clock: 3.0, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Performance },
-            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Performance },
-            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None },
-            storage: StorageInfo { total: 1000, available: 500, storage_type: StorageType::NvmeSsd },
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 8, threads: 8, base_clock: 3.0, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Performance, detection: Default::default() },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 8192, driver_version: "v".into(), pci_id: None, tier: GpuTier::Performance, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 1000, available: 500, storage_type: StorageType::NvmeSsd, detection: Default::default() },
             os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
             graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
         };
@@ -686,5 +808,173 @@ mod tests {
         assert_eq!(verdict.status, "exceeds_recommended");
 
         // No cwd restore needed.
+    }
+
+    #[tokio::test]
+    async fn test_anti_cheat_blocked_high_confidence() {
+        // Test that anti-cheat blocking returns high confidence verdict
+        reset_db_pool().await;
+
+        let td = tempdir().unwrap();
+        let db_path = td.path().join("intelligence.db");
+        let db_str = db_path.to_str().unwrap().to_string();
+        let db_url = format!("sqlite:{}?mode=rwc", db_str);
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+        crate::db::set_db_pool_for_tests(pool.clone()).await;
+
+        // Create games table (include full schema expected by check_game_compatibility)
+        sqlx::query(
+            r#"CREATE TABLE games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                steam_id INTEGER,
+                name TEXT,
+                min_cpu_cores INTEGER,
+                min_cpu_clock_ghz REAL,
+                min_cpu_text TEXT,
+                min_ram_mb INTEGER,
+                min_gpu_vram_mb INTEGER,
+                min_gpu_text TEXT,
+                min_storage_gb INTEGER,
+                rec_cpu_cores INTEGER,
+                rec_cpu_clock_ghz REAL,
+                rec_cpu_text TEXT,
+                rec_ram_mb INTEGER,
+                rec_gpu_vram_mb INTEGER,
+                rec_gpu_text TEXT,
+                rec_storage_gb INTEGER,
+                requirements_parsed INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create anti_cheat_status table
+        sqlx::query(
+            r#"CREATE TABLE anti_cheat_status (
+                steam_id INTEGER PRIMARY KEY,
+                anti_cheat_type TEXT,
+                linux_status TEXT
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a game
+        sqlx::query("INSERT INTO games (steam_id, name, requirements_parsed) VALUES ($1, $2, $3)")
+            .bind(100i64)
+            .bind("Blocked Game")
+            .bind(0i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Insert anti-cheat status with "denied" status
+        sqlx::query("INSERT INTO anti_cheat_status (steam_id, anti_cheat_type, linux_status) VALUES ($1, $2, $3)")
+            .bind(100i64)
+            .bind("EasyAntiCheat")
+            .bind("denied")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let hw = HardwareProfile {
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream, detection: Default::default() },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd, detection: Default::default() },
+            os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
+            graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
+        };
+
+        let verdict = check_game_compatibility(100, hw).await.unwrap();
+        assert_eq!(verdict.status, "below_minimum");
+        assert_eq!(verdict.confidence, "high");
+        assert!(verdict.summary.contains("anti-cheat"));
+    }
+
+    #[tokio::test]
+    async fn test_protondb_borked_high_confidence() {
+        // Test that ProtonDB "borked" rating returns high confidence verdict
+        reset_db_pool().await;
+
+        let td = tempdir().unwrap();
+        let db_path = td.path().join("intelligence.db");
+        let db_str = db_path.to_str().unwrap().to_string();
+        let db_url = format!("sqlite:{}?mode=rwc", db_str);
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+        crate::db::set_db_pool_for_tests(pool.clone()).await;
+
+        // Create games table (include full schema expected by check_game_compatibility)
+        sqlx::query(
+            r#"CREATE TABLE games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                steam_id INTEGER,
+                name TEXT,
+                min_cpu_cores INTEGER,
+                min_cpu_clock_ghz REAL,
+                min_cpu_text TEXT,
+                min_ram_mb INTEGER,
+                min_gpu_vram_mb INTEGER,
+                min_gpu_text TEXT,
+                min_storage_gb INTEGER,
+                rec_cpu_cores INTEGER,
+                rec_cpu_clock_ghz REAL,
+                rec_cpu_text TEXT,
+                rec_ram_mb INTEGER,
+                rec_gpu_vram_mb INTEGER,
+                rec_gpu_text TEXT,
+                rec_storage_gb INTEGER,
+                requirements_parsed INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create proton_compatibility table (schema expected by check_game_compatibility)
+        sqlx::query(
+            r#"CREATE TABLE proton_compatibility (
+                game_id INTEGER PRIMARY KEY,
+                protondb_rating TEXT,
+                total_reports INTEGER
+            )"#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert a game
+        sqlx::query("INSERT INTO games (steam_id, name, requirements_parsed) VALUES ($1, $2, $3)")
+            .bind(200i64)
+            .bind("Borked Game")
+            .bind(0i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Insert ProtonDB rating as "borked" for the created game (game_id should be 1)
+        sqlx::query("INSERT INTO proton_compatibility (game_id, protondb_rating, total_reports) VALUES ($1, $2, $3)")
+            .bind(1i64)
+            .bind("borked")
+            .bind(50i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let hw = HardwareProfile {
+            cpu: CpuInfo { model: "CPU".into(), vendor: "V".into(), cores: 4, threads: 4, base_clock: 2.5, boost_clock: None, architecture: "x86_64".into(), tier: CpuTier::Mainstream, detection: Default::default() },
+            gpu: GpuInfo { model: "GPU".into(), vendor: GpuVendor::Unknown, vram: 4096, driver_version: "v".into(), pci_id: None, tier: GpuTier::Mainstream, detection: Default::default(), vram_detection: Default::default() },
+            memory: MemoryInfo { total: 8192, available: 8000, speed: None, ddr_type: None, detection: Default::default() },
+            storage: StorageInfo { total: 500, available: 200, storage_type: StorageType::NvmeSsd, detection: Default::default() },
+            os: OsInfo { platform: "linux".into(), version: "1".into(), distribution: None },
+            graphics_api: GraphicsApiSupport { directx: None, vulkan: None, opengl: None, metal: None },
+        };
+
+        let verdict = check_game_compatibility(200, hw).await.unwrap();
+        assert_eq!(verdict.status, "below_minimum");
+        assert_eq!(verdict.confidence, "high");
+        assert!(verdict.summary.contains("Borked"));
     }
 }

@@ -52,13 +52,14 @@ pub fn detect_cpu() -> Result<CpuInfo> {
         boost_clock: None, // Could parse from cpuinfo if available
         architecture: std::env::consts::ARCH.to_string(),
         tier,
+        detection: DetectionMetadata::very_high("/proc/cpuinfo"),
     })
 }
 
 pub fn detect_gpu() -> Result<GpuInfo> {
     // Try multiple methods: lspci, nvidia-smi, rocm-smi, glxinfo
 
-    // Method 1: lspci (most reliable for basic info)
+    // Method 1: lspci (High confidence for GPU model detection)
     let lspci_output = Command::new("lspci")
         .output()
         .map_err(|e| HardwareError::GpuDetectionError(format!("lspci failed: {}", e)))?;
@@ -71,11 +72,12 @@ pub fn detect_gpu() -> Result<GpuInfo> {
         .find(|line| line.contains("VGA") || line.contains("3D controller"))
         .ok_or_else(|| HardwareError::GpuDetectionError("No GPU found in lspci".into()))?;
 
-    // Extract vendor and model
+    // Extract vendor and model (High confidence via lspci)
     let (vendor, model) = parse_gpu_from_lspci(gpu_line)?;
+    let gpu_detection = DetectionMetadata::high("lspci");
 
-    // Get VRAM - try nvidia-smi first, then fallback
-    let vram = detect_vram(&vendor)?;
+    // Get VRAM - try nvidia-smi first, then fallback (returns confidence metadata)
+    let (vram, vram_detection) = detect_vram(&vendor)?;
 
     // Get driver version
     let driver_version = detect_driver_version(&vendor)?;
@@ -90,11 +92,13 @@ pub fn detect_gpu() -> Result<GpuInfo> {
         driver_version,
         pci_id: extract_pci_id(gpu_line),
         tier,
+        detection: gpu_detection,
+        vram_detection,
     })
 }
 
 pub fn detect_memory() -> Result<MemoryInfo> {
-    // Read /proc/meminfo
+    // Read /proc/meminfo (VeryHigh confidence - kernel-provided data)
     let meminfo = fs::read_to_string("/proc/meminfo")
         .map_err(|e| HardwareError::MemoryDetectionError(e.to_string()))?;
 
@@ -128,11 +132,12 @@ pub fn detect_memory() -> Result<MemoryInfo> {
         available,
         speed,
         ddr_type: None, // Could parse from dmidecode
+        detection: DetectionMetadata::very_high("/proc/meminfo"),
     })
 }
 
 pub fn detect_storage() -> Result<StorageInfo> {
-    // Use df to get storage info
+    // Use df to get storage info (High confidence - standard Linux utility)
     let output = Command::new("df")
         .args(&["-BG", "/"])
         .output()
@@ -163,6 +168,7 @@ pub fn detect_storage() -> Result<StorageInfo> {
         total,
         available,
         storage_type,
+        detection: DetectionMetadata::high("df + lsblk"),
     })
 }
 
@@ -285,10 +291,10 @@ fn parse_gpu_from_lspci(line: &str) -> Result<(GpuVendor, String)> {
     Ok((vendor, model))
 }
 
-fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
+fn detect_vram(vendor: &GpuVendor) -> Result<(u64, DetectionMetadata)> {
     match vendor {
         GpuVendor::Nvidia => {
-            // Try nvidia-smi
+            // Try nvidia-smi (VeryHigh confidence - official NVIDIA tool)
             let output = Command::new("nvidia-smi")
                 .args(&["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
                 .output();
@@ -296,61 +302,83 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
             if let Ok(output) = output {
                 let vram_str = String::from_utf8_lossy(&output.stdout);
                 if let Ok(vram) = vram_str.trim().parse::<u64>() {
-                    return Ok(vram);
+                    return Ok((vram, DetectionMetadata::very_high("nvidia-smi")));
                 }
             }
         }
         GpuVendor::AMD => {
-            // Method 1: Try sysfs entries created by amdgpu driver
-            // Path: /sys/class/drm/card0/device/mem_info_vram_total
-            if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/mem_info_vram_total") {
-                for entry in entries.filter_map(|r| r.ok()) {
-                    if let Ok(vram_str) = std::fs::read_to_string(&entry) {
-                        if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
-                            return Ok(vram_bytes / (1024 * 1024)); // Bytes -> MB
+            // Method 1: Try several sysfs entries created by amdgpu driver (High confidence)
+            // Common paths include:
+            // /sys/class/drm/card*/device/mem_info_vram_total (bytes)
+            // /sys/class/drm/card*/device/memory_info_vram_total
+            // /sys/kernel/debug/dri/*/mem_info_vram_total
+            let sysfs_patterns = [
+                "/sys/class/drm/card*/device/mem_info_vram_total",
+                "/sys/class/drm/card*/device/memory_info_vram_total",
+                "/sys/kernel/debug/dri/*/mem_info_vram_total",
+            ];
+
+            for pat in &sysfs_patterns {
+                if let Ok(entries) = glob::glob(pat) {
+                    for entry in entries.filter_map(|r| r.ok()) {
+                        if let Ok(vram_raw) = std::fs::read_to_string(&entry) {
+                            let vram_trim = vram_raw.trim();
+                            
+                            // Extract the first contiguous sequence of digits
+                            // This handles formats like "8192", "8192 MB", "VRAM: 8192", etc.
+                            if let Some(digits) = extract_first_digits(vram_trim) {
+                                // Many sysfs values are bytes; if value seems large assume bytes
+                                let vram_mb = if digits > (16 * 1024 * 1024) { // >16MB in bytes
+                                    digits / (1024 * 1024)
+                                } else {
+                                    // Probably already in MB
+                                    digits
+                                };
+                                return Ok((vram_mb, DetectionMetadata::high("sysfs/amdgpu")));
+                            }
                         }
                     }
                 }
             }
 
-            // Method 2: Try alternate sysfs path (some drivers use this)
+            // Method 2: Try alternate sysfs path (some drivers expose PCI resource ranges) - Moderate confidence
             if let Ok(entries) = glob::glob("/sys/class/drm/card*/device/resource") {
                 for entry in entries.filter_map(|r| r.ok()) {
                     if let Ok(content) = std::fs::read_to_string(&entry) {
                         // Parse PCI BAR resources to estimate VRAM
                         if let Some(vram) = parse_pci_resource_vram(&content) {
-                            return Ok(vram);
+                            return Ok((vram, DetectionMetadata::moderate("pci-resource-bars")));
                         }
                     }
                 }
             }
 
-            // Method 3: Try rocm-smi
+            // Method 3: Try rocm-smi (Moderate confidence - ROCm runtime tool)
             let output = Command::new("rocm-smi").arg("--showmeminfo").arg("vram").output();
             if let Ok(output) = output {
                 let s = String::from_utf8_lossy(&output.stdout);
                 if let Some(num) = parse_rocm_smi_output(&s) {
-                    return Ok(num);
+                    return Ok((num, DetectionMetadata::moderate("rocm-smi")));
                 }
             }
 
-            // Method 4: Try amdgpu-pro-based detection via radeontop
+            // Method 4: Try amdgpu-pro-based detection via radeontop (Low confidence)
             let output = Command::new("radeontop").args(&["-d", "-", "-l", "1"]).output();
             if let Ok(output) = output {
                 let s = String::from_utf8_lossy(&output.stdout);
                 if let Some(vram) = parse_radeontop_vram(&s) {
-                    return Ok(vram);
+                    return Ok((vram, DetectionMetadata::low("radeontop")));
                 }
             }
         }
         GpuVendor::Intel => {
             // Intel integrated GPUs share system RAM, try to detect allocated VRAM
-            // Check i915 sysfs
+            // Check i915 sysfs (High confidence)
             if let Ok(entries) = glob::glob("/sys/class/drm/card*/gt/gt*/stolen_size") {
                 for entry in entries.filter_map(|r| r.ok()) {
                     if let Ok(vram_str) = std::fs::read_to_string(&entry) {
                         if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
-                            return Ok(vram_bytes / (1024 * 1024));
+                            return Ok((vram_bytes / (1024 * 1024), DetectionMetadata::high("sysfs/i915")));
                         }
                     }
                 }
@@ -359,12 +387,12 @@ fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
         _ => {}
     }
 
-    // Universal fallback: Try glxinfo
+    // Universal fallback: Try glxinfo (Low confidence - may report shared memory)
     if let Some(vram) = detect_vram_from_glxinfo() {
-        return Ok(vram);
+        return Ok((vram, DetectionMetadata::low("glxinfo")));
     }
 
-    Ok(0) // Unknown - will need to look up in database by model
+    Ok((0, DetectionMetadata::unknown())) // Unknown - will need to look up in database by model
 }
 
 /// Parse VRAM from glxinfo output (works for most GPUs)
@@ -450,21 +478,58 @@ fn parse_radeontop_vram(output: &str) -> Option<u64> {
     None
 }
 
+/// Extract the first contiguous sequence of digits from a string.
+/// This handles formats like "8192", "8192 MB", "VRAM: 8192 MB (used: 2048)", etc.
+/// Returns None if no digits are found.
+fn extract_first_digits(s: &str) -> Option<u64> {
+    let mut digits_str = String::new();
+    let mut found_digit = false;
+    
+    for ch in s.chars() {
+        if ch.is_digit(10) {
+            digits_str.push(ch);
+            found_digit = true;
+        } else if found_digit {
+            // Stop at the first non-digit after we've found digits
+            break;
+        }
+    }
+    
+    digits_str.parse::<u64>().ok()
+}
+
 // Parse `rocm-smi --showmeminfo` (or similar) output for a VRAM value in MB.
 fn parse_rocm_smi_output(s: &str) -> Option<u64> {
     for line in s.lines() {
         let lower = line.to_lowercase();
-        if lower.contains("vram") || lower.contains("memory") || lower.contains("mem") {
-            // Try to find a token containing a number with optional 'MB'
-            for tok in line.split_whitespace() {
+        if lower.contains("vram") || lower.contains("memory") || lower.contains("mem") || lower.contains("total") {
+            // Normalize tokens by removing commas and parentheses
+            let cleaned = line.replace(',', " ").replace('(', " ").replace(')', " ");
+            for tok in cleaned.split_whitespace() {
                 let t = tok.trim().trim_end_matches(',');
-                if let Some(n) = t.strip_suffix("MB") {
-                    if let Ok(val) = n.parse::<u64>() {
+                // Accept MB, MiB, GB, GiB
+                let tl = t.to_lowercase();
+                if tl.ends_with("mib") || tl.ends_with("mb") {
+                    let num = tl.trim_end_matches("mib").trim_end_matches("mb").trim();
+                    if let Ok(n) = num.parse::<u64>() {
+                        return Some(n);
+                    }
+                }
+                if tl.ends_with("gib") || tl.ends_with("gb") {
+                    let num = tl.trim_end_matches("gib").trim_end_matches("gb").trim();
+                    if let Ok(n) = num.parse::<u64>() {
+                        return Some(n * 1024);
+                    }
+                }
+                // Plain number token - interpret as MB if reasonable
+                if let Ok(val) = t.parse::<u64>() {
+                    if val > 64 && val < 200000 { // plausible MB range
                         return Some(val);
                     }
-                } else if let Ok(val) = t.parse::<u64>() {
-                    // If token is a plain number, assume it's MB
-                    return Some(val);
+                    // If value looks like bytes, convert
+                    if val > (1024 * 1024) {
+                        return Some(val / (1024 * 1024));
+                    }
                 }
             }
         }
@@ -495,7 +560,7 @@ fn default_runner(cmd: &str, args: &[&str]) -> Option<String> {
 
 // Generic detect_vram which accepts an injectable runner for testing.
 #[cfg(test)]
-pub fn detect_vram_with_runner<F>(vendor: &GpuVendor, runner: F) -> Result<u64>
+pub fn detect_vram_with_runner<F>(vendor: &GpuVendor, runner: F) -> Result<(u64, DetectionMetadata)>
 where
     F: Fn(&str, &[&str]) -> Option<String>,
 {
@@ -507,7 +572,7 @@ where
                 &["--query-gpu=memory.total", "--format=csv,noheader,nounits"],
             ) {
                 if let Some(n) = parse_nvidia_smi_output(&out) {
-                    return Ok(n);
+                    return Ok((n, DetectionMetadata::very_high("nvidia-smi")));
                 }
             }
         }
@@ -517,7 +582,7 @@ where
                 for entry in entries.filter_map(|r| r.ok()) {
                     if let Ok(vram_str) = std::fs::read_to_string(&entry) {
                         if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
-                            return Ok(vram_bytes / (1024 * 1024)); // Bytes -> MB
+                            return Ok((vram_bytes / (1024 * 1024), DetectionMetadata::high("sysfs/amdgpu"))); // Bytes -> MB
                         }
                     }
                 }
@@ -525,7 +590,7 @@ where
             // Fallback to rocm-smi via runner
             if let Some(out) = runner("rocm-smi", &["--showmeminfo"]) {
                 if let Some(n) = parse_rocm_smi_output(&out) {
-                    return Ok(n);
+                    return Ok((n, DetectionMetadata::moderate("rocm-smi")));
                 }
             }
         }
@@ -533,30 +598,30 @@ where
     }
 
     // Fallback: Try to estimate from lspci or glxinfo
-    Ok(0)
+    Ok((0, DetectionMetadata::unknown()))
 }
 
 // Helper used by tests to exercise parsing logic directly from provided output
 #[allow(dead_code)]
-pub fn detect_vram_from_output(vendor: &GpuVendor, output: Option<&str>) -> Result<u64> {
+pub fn detect_vram_from_output(vendor: &GpuVendor, output: Option<&str>) -> Result<(u64, DetectionMetadata)> {
     match vendor {
         GpuVendor::Nvidia => {
             if let Some(s) = output {
                 if let Some(n) = parse_nvidia_smi_output(s) {
-                    return Ok(n);
+                    return Ok((n, DetectionMetadata::very_high("nvidia-smi")));
                 }
             }
         }
         GpuVendor::AMD => {
             if let Some(s) = output {
                 if let Some(n) = parse_rocm_smi_output(s) {
-                    return Ok(n);
+                    return Ok((n, DetectionMetadata::moderate("rocm-smi")));
                 }
             }
         }
         _ => {}
     }
-    Ok(0)
+    Ok((0, DetectionMetadata::unknown()))
 }
 
 #[test]
@@ -591,10 +656,44 @@ fn test_detect_vram_unknown_uses_fallback() {
     // Unknown vendor will try glxinfo fallback
     // On systems with glxinfo, this may return actual VRAM
     // On systems without, it returns 0
-    let v = detect_vram(&GpuVendor::Unknown).unwrap();
+    let (vram, metadata) = detect_vram(&GpuVendor::Unknown).unwrap();
     // Just verify it doesn't error - value depends on system
-    let _ = v;
+    let _ = vram;
+    // Metadata should be either Low (glxinfo) or Unknown (no detection)
+    assert!(metadata.confidence == DetectionConfidence::Low || metadata.confidence == DetectionConfidence::Unknown);
 }
+
+#[test]
+fn test_extract_first_digits_simple() {
+    assert_eq!(extract_first_digits("8192"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_with_units() {
+    assert_eq!(extract_first_digits("8192 MB"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_with_prefix() {
+    assert_eq!(extract_first_digits("VRAM: 8192"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_multiple_numbers() {
+    // Should extract only the first number, not concatenate
+    assert_eq!(extract_first_digits("VRAM: 8192 MB (used: 2048)"), Some(8192));
+}
+
+#[test]
+fn test_extract_first_digits_no_digits() {
+    assert_eq!(extract_first_digits("No numbers here"), None);
+}
+
+#[test]
+fn test_extract_first_digits_bytes_format() {
+    assert_eq!(extract_first_digits("8589934592"), Some(8589934592));
+}
+
 
 #[test]
 fn test_parse_nvidia_smi_output_csv() {
@@ -605,29 +704,35 @@ fn test_parse_nvidia_smi_output_csv() {
 #[test]
 fn test_detect_vram_from_output_nvidia() {
     let sample = "8192\n";
-    let v = detect_vram_from_output(&GpuVendor::Nvidia, Some(sample)).unwrap();
-    assert_eq!(v, 8192);
+    let (vram, metadata) = detect_vram_from_output(&GpuVendor::Nvidia, Some(sample)).unwrap();
+    assert_eq!(vram, 8192);
+    assert_eq!(metadata.confidence, DetectionConfidence::VeryHigh);
+    assert_eq!(metadata.method, "nvidia-smi");
 }
 
 #[test]
 fn test_detect_vram_from_output_amd() {
     let sample = "VRAM : 4096MB";
-    let v = detect_vram_from_output(&GpuVendor::AMD, Some(sample)).unwrap();
-    assert_eq!(v, 4096);
+    let (vram, metadata) = detect_vram_from_output(&GpuVendor::AMD, Some(sample)).unwrap();
+    assert_eq!(vram, 4096);
+    assert_eq!(metadata.confidence, DetectionConfidence::Moderate);
+    assert_eq!(metadata.method, "rocm-smi");
 }
 
 #[test]
 fn test_detect_vram_with_runner_nvidia() {
     let runner = |_: &str, _: &[&str]| Some("12345\n".to_string());
-    let v = detect_vram_with_runner(&GpuVendor::Nvidia, runner).unwrap();
-    assert_eq!(v, 12345);
+    let (vram, metadata) = detect_vram_with_runner(&GpuVendor::Nvidia, runner).unwrap();
+    assert_eq!(vram, 12345);
+    assert_eq!(metadata.confidence, DetectionConfidence::VeryHigh);
 }
 
 #[test]
 fn test_detect_vram_with_runner_amd() {
     let runner = |_: &str, _: &[&str]| Some("VRAM : 2048MB".to_string());
-    let v = detect_vram_with_runner(&GpuVendor::AMD, runner).unwrap();
-    assert_eq!(v, 2048);
+    let (vram, metadata) = detect_vram_with_runner(&GpuVendor::AMD, runner).unwrap();
+    assert_eq!(vram, 2048);
+    assert_eq!(metadata.confidence, DetectionConfidence::Moderate);
 }
 
 #[test]

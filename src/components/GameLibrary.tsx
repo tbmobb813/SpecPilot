@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invokeTauri } from '../api/tauri';
 import { HardwareProfile } from '../api/hardware';
+import { UnifiedVerdictDashboard } from './UnifiedVerdictDashboard';
 
 interface GameResult {
   steam_id: number;
@@ -10,6 +11,8 @@ interface GameResult {
   header_image: string | null;
   protondb_rating: string | null;
   deck_status: string | null;
+  anti_cheat_type: string | null;
+  anti_cheat_status: string | null;  // "supported", "denied", "broken", "unknown"
   verdict: VerdictResult | null;
 }
 
@@ -49,6 +52,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>('all');
   const [genreFilter, setGenreFilter] = useState<string>('all');
+  const [hideAntiCheatBlocked, setHideAntiCheatBlocked] = useState(false);
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
 
   // Load all games on mount and whenever `hardwareProfile` changes so
@@ -186,15 +190,20 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       );
     }
 
+    // Anti-cheat filter
+    if (hideAntiCheatBlocked) {
+      filtered = filtered.filter(g => !isAntiCheatBlocked(g));
+    }
+
     setFilteredGames(filtered);
-  }, [games, searchQuery, verdictFilter, genreFilter, hardwareProfile]);
+  }, [games, searchQuery, verdictFilter, genreFilter, hideAntiCheatBlocked, hardwareProfile]);
 
   // Call applyFilters whenever inputs or the callback identity change.
   // `applyFilters` depends on `hardwareProfile`, so include it indirectly
   // by depending on the stable `applyFilters` reference.
   useEffect(() => {
     applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
+  }, [games, searchQuery, verdictFilter, genreFilter, hideAntiCheatBlocked, applyFilters]);
 
   const checkGameCompatibility = async (game: GameResult) => {
     if (!hardwareProfile) {
@@ -295,6 +304,23 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     }
   };
 
+  const getAntiCheatColor = (status: string | null): string => {
+    switch (status?.toLowerCase()) {
+      case 'supported':
+        return '#22c55e';
+      case 'denied':
+      case 'broken':
+        return '#ef4444';
+      default:
+        return '#6b7280';
+    }
+  };
+
+  const isAntiCheatBlocked = (game: GameResult): boolean => {
+    const status = game.anti_cheat_status?.toLowerCase();
+    return status === 'denied' || status === 'broken';
+  };
+
   // Group games by verdict
   const groupedGames = {
     can_run: filteredGames.filter(g =>
@@ -325,14 +351,9 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   if (selectedGame) {
     return (
       <div className="game-library">
-        <GameDetail
+        <UnifiedVerdictDashboard
           game={selectedGame}
           onBack={() => setSelectedGame(null)}
-          getVerdictColor={getVerdictColor}
-          getVerdictEmoji={getVerdictEmoji}
-          getVerdictLabel={getVerdictLabel}
-          getProtonColor={getProtonColor}
-          getDeckColor={getDeckColor}
         />
       </div>
     );
@@ -389,6 +410,17 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
           </select>
         </div>
 
+        <div className="filter-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={hideAntiCheatBlocked}
+              onChange={(e) => setHideAntiCheatBlocked(e.target.checked)}
+            />
+            Hide Anti-Cheat Blocked
+          </label>
+        </div>
+
         <div className="filter-stats">
           Showing {filteredGames.length} of {games.length} games
         </div>
@@ -408,6 +440,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
             />
           )}
 
@@ -422,6 +456,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
             />
           )}
 
@@ -436,6 +472,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
               collapsed={true}
             />
           )}
@@ -451,6 +489,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
               collapsed={true}
             />
           )}
@@ -469,6 +509,8 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
               getVerdictLabel={getVerdictLabel}
               getProtonColor={getProtonColor}
               getDeckColor={getDeckColor}
+              getAntiCheatColor={getAntiCheatColor}
+              isAntiCheatBlocked={isAntiCheatBlocked}
             />
           ))}
         </div>
@@ -499,6 +541,8 @@ interface GameSectionProps {
   getVerdictLabel: (status: string) => string;
   getProtonColor: (rating: string) => string;
   getDeckColor: (status: string) => string;
+  getAntiCheatColor: (status: string | null) => string;
+  isAntiCheatBlocked: (game: GameResult) => boolean;
 }
 
 function GameSection({
@@ -546,6 +590,8 @@ interface GameCardProps {
   getVerdictLabel: (status: string) => string;
   getProtonColor: (rating: string) => string;
   getDeckColor: (status: string) => string;
+  getAntiCheatColor: (status: string | null) => string;
+  isAntiCheatBlocked: (game: GameResult) => boolean;
 }
 
 function GameCard({
@@ -557,12 +603,23 @@ function GameCard({
   getVerdictLabel,
   getProtonColor,
   getDeckColor,
+  getAntiCheatColor,
+  isAntiCheatBlocked,
 }: GameCardProps) {
+  const blocked = isAntiCheatBlocked(game);
+
   return (
     <div
-      className={`game-card ${checking ? 'checking' : ''}`}
+      className={`game-card ${checking ? 'checking' : ''} ${blocked ? 'blocked' : ''}`}
       onClick={() => !checking && onSelect(game)}
     >
+      {/* Anti-cheat blocked banner */}
+      {blocked && (
+        <div className="blocked-banner">
+          Anti-Cheat Blocked: {game.anti_cheat_type}
+        </div>
+      )}
+
       <div className="game-info">
         <h4 className="game-name">{game.name}</h4>
         <div className="game-meta">
@@ -572,6 +629,17 @@ function GameCard({
       </div>
 
       <div className="game-badges">
+        {/* Anti-cheat badge (show if has anti-cheat, even if supported) */}
+        {game.anti_cheat_type && (
+          <span
+            className="badge anticheat-badge"
+            style={{ backgroundColor: getAntiCheatColor(game.anti_cheat_status) }}
+            title={`Anti-cheat: ${game.anti_cheat_type} (${game.anti_cheat_status || 'unknown'})`}
+          >
+            {blocked ? '🚫' : '🛡️'} {game.anti_cheat_type}
+          </span>
+        )}
+
         {game.verdict && (
           <span
             className="badge verdict-badge"
@@ -605,169 +673,4 @@ function GameCard({
   );
 }
 
-interface GameDetailProps {
-  game: GameResult;
-  onBack: () => void;
-  getVerdictColor: (status: string) => string;
-  getVerdictEmoji: (status: string) => string;
-  getVerdictLabel: (status: string) => string;
-  getProtonColor: (rating: string) => string;
-  getDeckColor: (status: string) => string;
-}
-
-function GameDetail({
-  game,
-  onBack,
-  getVerdictColor,
-  getVerdictEmoji,
-  getVerdictLabel,
-  getProtonColor,
-  getDeckColor,
-}: GameDetailProps) {
-  return (
-    <div className="game-detail">
-      <button className="back-button" onClick={onBack}>
-        ← Back to Library
-      </button>
-
-      <div className="detail-header">
-        {game.header_image && (
-          <img src={game.header_image} alt={game.name} className="game-header-image" />
-        )}
-        <div className="detail-info">
-          <h2>{game.name}</h2>
-          <div className="detail-meta">
-            {game.genre && <span>{game.genre}</span>}
-            {game.release_year && <span>{game.release_year}</span>}
-          </div>
-        </div>
-      </div>
-
-      <div className="compatibility-section">
-        <h3>Compatibility</h3>
-
-        <div className="compat-grid">
-          {/* Hardware Verdict */}
-          {game.verdict && (
-            <div className="compat-card">
-              <h4>Your Hardware</h4>
-              <div
-                className="verdict-status"
-                style={{ backgroundColor: getVerdictColor(game.verdict.status) }}
-              >
-                {getVerdictEmoji(game.verdict.status)} {getVerdictLabel(game.verdict.status)}
-              </div>
-              <p className="verdict-summary">{game.verdict.summary}</p>
-              <div className="confidence">Confidence: {game.verdict.confidence}</div>
-
-              {game.verdict.details.length > 0 && (
-                <ul className="verdict-details">
-                  {game.verdict.details.map((detail, i) => (
-                    <li key={i}>{detail}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {/* ProtonDB */}
-          {game.protondb_rating && (
-            <div className="compat-card">
-              <h4>ProtonDB (Linux)</h4>
-              <div
-                className="verdict-status"
-                style={{ backgroundColor: getProtonColor(game.protondb_rating) }}
-              >
-                🐧 {game.protondb_rating}
-              </div>
-              <p className="source-info">Community Linux compatibility</p>
-            </div>
-          )}
-
-          {/* Steam Deck */}
-          {game.deck_status && (
-            <div className="compat-card">
-              <h4>Steam Deck</h4>
-              <div
-                className="verdict-status"
-                style={{ backgroundColor: getDeckColor(game.deck_status) }}
-              >
-                🎮 {game.deck_status}
-              </div>
-              <p className="source-info">Valve's official verification</p>
-            </div>
-          )}
-        </div>
-
-        {/* Requirements */}
-        {game.verdict?.min_requirements && (
-          <div className="requirements-section">
-            <h4>System Requirements</h4>
-            <div className="requirements-grid">
-              <div className="req-column">
-                <h5>Minimum</h5>
-                <ul>
-                  {game.verdict.min_requirements.ram_gb && (
-                    <li>RAM: {game.verdict.min_requirements.ram_gb} GB</li>
-                  )}
-                  {game.verdict.min_requirements.gpu_vram_gb && (
-                    <li>VRAM: {game.verdict.min_requirements.gpu_vram_gb} GB</li>
-                  )}
-                  {game.verdict.min_requirements.gpu_text && (
-                    <li>GPU: {game.verdict.min_requirements.gpu_text}</li>
-                  )}
-                  {game.verdict.min_requirements.cpu_text && (
-                    <li>CPU: {game.verdict.min_requirements.cpu_text}</li>
-                  )}
-                  {game.verdict.min_requirements.storage_gb && (
-                    <li>Storage: {game.verdict.min_requirements.storage_gb} GB</li>
-                  )}
-                </ul>
-              </div>
-
-              {game.verdict.rec_requirements && (
-                <div className="req-column">
-                  <h5>Recommended</h5>
-                  <ul>
-                    {game.verdict.rec_requirements.ram_gb && (
-                      <li>RAM: {game.verdict.rec_requirements.ram_gb} GB</li>
-                    )}
-                    {game.verdict.rec_requirements.gpu_vram_gb && (
-                      <li>VRAM: {game.verdict.rec_requirements.gpu_vram_gb} GB</li>
-                    )}
-                    {game.verdict.rec_requirements.gpu_text && (
-                      <li>GPU: {game.verdict.rec_requirements.gpu_text}</li>
-                    )}
-                    {game.verdict.rec_requirements.cpu_text && (
-                      <li>CPU: {game.verdict.rec_requirements.cpu_text}</li>
-                    )}
-                    {game.verdict.rec_requirements.storage_gb && (
-                      <li>Storage: {game.verdict.rec_requirements.storage_gb} GB</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="external-links">
-        <a
-          href={`https://store.steampowered.com/app/${game.steam_id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View on Steam →
-        </a>
-        <a
-          href={`https://www.protondb.com/app/${game.steam_id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View on ProtonDB →
-        </a>
-      </div>
-    </div>
-  );
-}
+// Note: GameDetail component has been replaced by UnifiedVerdictDashboard
