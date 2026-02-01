@@ -575,8 +575,12 @@ pub async fn check_game_compatibility(
         }
         _ => {
             // Unknown or no data
-            details.push(format!("ProtonDB: {} ({} reports)", proton_rating_str, proton_total_reports));
-            conf_value = conf_value * 0.9;
+            if proton_total_reports > 0 {
+                details.push(format!("ProtonDB: {} ({} reports)", proton_rating_str, proton_total_reports));
+                conf_value = conf_value * 0.9;
+            } else {
+                details.push("ProtonDB: No reports available".to_string());
+            }
         }
     }
 
