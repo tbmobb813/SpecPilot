@@ -174,6 +174,9 @@ function extractStorageText(html) {
 async function seedGames(db, games, options = {}) {
   const { fetchRequirements = true, limit = null, verbose = false } = options;
 
+  if (verbose) {
+    console.log(`Seeding ${games.length} games (fetchRequirements=${fetchRequirements}, limit=${limit === null ? 'none' : limit})`);
+  }
   const insertGame = db.prepare(`
     INSERT INTO games (
       steam_id, name, genre, release_year, header_image,
