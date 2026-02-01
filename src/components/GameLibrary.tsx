@@ -56,10 +56,11 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     loadGames();
   }, []);
 
-  // Apply filters when games or filters change
-  useEffect(() => {
-    applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
+  // Filters application function
+  
+
+  // Filters application function (moved above effect to avoid TDZ)
+  
 
   const loadGames = async () => {
     setLoading(true);
@@ -98,7 +99,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
         for (let i = 0; i < results.length; i += BATCH_SIZE) {
           const batch = results.slice(i, i + BATCH_SIZE);
           const batchResults = await Promise.all(
-            batch.map(async (game, batchIndex) => {
+            batch.map(async (game) => {
               try {
                 const verdict: VerdictResult = await invoke('check_game_compatibility', {
                   steamId: game.steam_id,
@@ -182,6 +183,11 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
 
     setFilteredGames(filtered);
   }, [games, searchQuery, verdictFilter, genreFilter, hardwareProfile]);
+
+  // Call applyFilters whenever inputs change
+  useEffect(() => {
+    applyFilters();
+  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
 
   const checkGameCompatibility = async (game: GameResult) => {
     if (!hardwareProfile) {

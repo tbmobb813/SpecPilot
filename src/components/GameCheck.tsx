@@ -10,6 +10,23 @@ interface GameResult {
   verdict?: VerdictResult;
 }
 
+interface RequirementsSummary {
+  cpu_text?: string | null;
+  ram_gb?: number | null;
+  gpu_text?: string | null;
+  gpu_vram_gb?: number | null;
+  storage_gb?: number | null;
+}
+
+interface VerdictResult {
+  status: string;
+  confidence: string;
+  summary: string;
+  details: string[];
+  min_requirements: RequirementsSummary | null;
+  rec_requirements: RequirementsSummary | null;
+}
+
 /*
  Copilot AI note (manual review):
  The `VerdictResult` type previously used by an older/unused `GameCheck` component
