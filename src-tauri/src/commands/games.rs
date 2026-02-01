@@ -348,26 +348,34 @@ pub async fn check_game_compatibility(
     } else {
             // Check if we significantly exceed recommended specs.
             // Only consider a metric if the corresponding recommended value is present.
-            let mut exceeds = false;
+            // Instead of requiring any single metric to be > 2x, compute an average ratio
+            // across all available metrics and require that average to be >= 2.0.
+            let mut total_ratio: f64 = 0.0;
+            let mut metrics_count: i32 = 0;
 
             if let Some(rec_ram) = game.rec_ram_mb {
-                if user_ram_mb > (rec_ram as i64) * 2 {
-                    exceeds = true;
+                if rec_ram > 0 {
+                    total_ratio += (user_ram_mb as f64) / (rec_ram as f64);
+                    metrics_count += 1;
                 }
             }
 
             if let Some(rec_vram) = game.rec_gpu_vram_mb {
-                if user_vram_mb > (rec_vram as i64) * 2 {
-                    exceeds = true;
+                if rec_vram > 0 {
+                    total_ratio += (user_vram_mb as f64) / (rec_vram as f64);
+                    metrics_count += 1;
                 }
             }
 
             if let Some(rec_cores) = game.rec_cpu_cores {
-                if user_cpu_cores > (rec_cores as i64) * 2 {
-                    exceeds = true;
+                if rec_cores > 0 {
+                    total_ratio += (user_cpu_cores as f64) / (rec_cores as f64);
+                    metrics_count += 1;
                 }
             }
 
+            let exceeds = metrics_count > 0
+                && (total_ratio / metrics_count as f64) >= 2.0;
             if exceeds {
                 (
                     "exceeds_recommended".to_string(),
