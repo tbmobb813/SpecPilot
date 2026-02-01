@@ -98,31 +98,28 @@ export enum GpuTier {
 export type GpuVendor = 'Nvidia' | 'AMD' | 'Intel' | 'Apple' | 'Unknown';
 export type StorageType = 'HDD' | 'SATA_SSD' | 'NVMe_SSD' | 'Unknown';
 
-async function getInvoke(): Promise<((cmd: string, args?: any) => Promise<any>) | null> {
-  try {
-    const mod = await import('@tauri-apps/api/core');
-    const inv = (mod as any).invoke;
-    if (typeof inv === 'function') return inv as (cmd: string, args?: any) => Promise<any>;
-  } catch (e) {
-    // ignore - Tauri runtime not available in browser/dev
-  }
-  return null;
-}
+import { invokeTauri } from './tauri';
 
 export async function scanHardware(): Promise<HardwareProfile | null> {
-  const inv = await getInvoke();
-  if (!inv) return null;
-  return await inv('scan_hardware');
+  try {
+    return await invokeTauri('scan_hardware');
+  } catch {
+    return null;
+  }
 }
 
 export async function getCachedProfile(): Promise<HardwareProfile | null> {
-  const inv = await getInvoke();
-  if (!inv) return null;
-  return await inv('get_cached_profile');
+  try {
+    return await invokeTauri('get_cached_profile');
+  } catch {
+    return null;
+  }
 }
 
 export async function saveProfile(profile: HardwareProfile): Promise<void> {
-  const inv = await getInvoke();
-  if (!inv) return;
-  return await inv('save_profile', { profile });
+  try {
+    await invokeTauri('save_profile', { profile });
+  } catch {
+    // noop in non-tauri environment
+  }
 }

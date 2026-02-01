@@ -192,7 +192,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
 
     setCheckingGame(game.steam_id);
     try {
-      const verdict: VerdictResult = await invoke('check_game_compatibility', {
+      const verdict: VerdictResult = await invokeTauri('check_game_compatibility', {
         steamId: game.steam_id,
         hardware: hardwareProfile,
       });
