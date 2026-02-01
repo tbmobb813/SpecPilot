@@ -59,8 +59,14 @@ export function ReadyUp() {
     }
   };
 
-  const copyCommand = (command: string) => {
-    navigator.clipboard.writeText(command);
+  const copyCommand = async (command: string) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      window.alert('Command copied to clipboard.');
+    } catch (err) {
+      console.error('Failed to copy command to clipboard', err);
+      window.alert('Failed to copy command to clipboard. Please copy it manually.');
+    }
   };
 
   return (

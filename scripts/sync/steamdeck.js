@@ -147,15 +147,15 @@ async function main() {
     db.exec(`
       CREATE TABLE IF NOT EXISTS steamdeck_compatibility (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        game_id INTEGER UNIQUE,
+        steam_id INTEGER UNIQUE,
         deck_status TEXT,
         deck_tested INTEGER DEFAULT 0,
         recommended_settings TEXT,
         notes TEXT,
         last_synced DATETIME,
-        FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
+        FOREIGN KEY(steam_id) REFERENCES games(steam_id) ON DELETE CASCADE
       );
-      CREATE INDEX IF NOT EXISTS idx_steamdeck_game ON steamdeck_compatibility(game_id);
+      CREATE INDEX IF NOT EXISTS idx_steamdeck_game ON steamdeck_compatibility(steam_id);
       CREATE INDEX IF NOT EXISTS idx_steamdeck_status ON steamdeck_compatibility(deck_status);
     `);
 
@@ -179,9 +179,9 @@ async function main() {
     console.log(`Syncing Steam Deck compatibility for ${games.length} games...`);
 
     const upsertStmt = db.prepare(`
-      INSERT INTO steamdeck_compatibility (game_id, deck_status, deck_tested, notes, last_synced)
+      INSERT INTO steamdeck_compatibility (steam_id, deck_status, deck_tested, notes, last_synced)
       VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(game_id) DO UPDATE SET
+      ON CONFLICT(steam_id) DO UPDATE SET
         deck_status = excluded.deck_status,
         deck_tested = excluded.deck_tested,
         notes = excluded.notes,
@@ -206,7 +206,7 @@ async function main() {
       if (deckInfo) {
         const now = new Date().toISOString();
         upsertStmt.run(
-          game.id,
+          game.steam_id,
           deckInfo.status,
           deckInfo.tested ? 1 : 0,
           deckInfo.notes || null,

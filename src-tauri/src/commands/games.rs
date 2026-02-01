@@ -79,7 +79,7 @@ pub async fn search_games(query: String) -> Result<Vec<GameResult>, String> {
                 p.protondb_rating, d.deck_status
          FROM games g
          LEFT JOIN proton_compatibility p ON p.game_id = g.id
-         LEFT JOIN steamdeck_compatibility d ON d.game_id = g.id
+         LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
          WHERE LOWER(g.name) LIKE $1
          ORDER BY
            CASE WHEN g.requirements_parsed = 1 THEN 0 ELSE 1 END,
@@ -117,27 +117,46 @@ pub async fn browse_games(
     let limit_val = limit.unwrap_or(50);
     let offset_val = offset.unwrap_or(0);
 
-    // Build query based on filters
-    let mut query = String::from(
-        "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
-                p.protondb_rating, d.deck_status
-         FROM games g
-         LEFT JOIN proton_compatibility p ON p.game_id = g.id
-         LEFT JOIN steamdeck_compatibility d ON d.game_id = g.id
-         WHERE g.requirements_parsed = 1"
-    );
-
-    if let Some(ref genre) = filter_genre {
-        query.push_str(&format!(" AND g.genre LIKE '%{}%'", genre));
-    }
-
-    query.push_str(" ORDER BY g.name");
-    query.push_str(&format!(" LIMIT {} OFFSET {}", limit_val, offset_val));
-
-    let rows: Vec<GameRow> = sqlx::query_as(&query)
+    // Build and execute parameterized query based on filters
+    let rows: Vec<GameRow> = if let Some(ref genre) = filter_genre {
+        // With genre filter
+        sqlx::query_as(
+            "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                    p.protondb_rating, d.deck_status
+             FROM games g
+             LEFT JOIN proton_compatibility p ON p.game_id = g.id
+             LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+             WHERE g.requirements_parsed = 1
+               AND g.genre LIKE ?
+             ORDER BY g.name
+             LIMIT ?
+             OFFSET ?",
+        )
+        .bind(format!("%{}%", genre))
+        .bind(limit_val)
+        .bind(offset_val)
         .fetch_all(&pool)
         .await
-        .map_err(|e| format!("Query failed: {}", e))?;
+        .map_err(|e| format!("Query failed: {}", e))?
+    } else {
+        // Without genre filter
+        sqlx::query_as(
+            "SELECT g.steam_id, g.name, g.genre, g.release_year, g.header_image,
+                    p.protondb_rating, d.deck_status
+             FROM games g
+             LEFT JOIN proton_compatibility p ON p.game_id = g.id
+             LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
+             WHERE g.requirements_parsed = 1
+             ORDER BY g.name
+             LIMIT ?
+             OFFSET ?",
+        )
+        .bind(limit_val)
+        .bind(offset_val)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| format!("Query failed: {}", e))?
+    };
 
     let results = rows.into_iter().map(|row| GameResult {
         steam_id: row.steam_id,

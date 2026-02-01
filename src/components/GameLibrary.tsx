@@ -58,7 +58,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   // Apply filters when games or filters change
   useEffect(() => {
     applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter]);
+  }, [games, searchQuery, verdictFilter, genreFilter, applyFilters]);
 
   const loadGames = async () => {
     setLoading(true);
