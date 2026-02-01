@@ -167,7 +167,8 @@ pub fn detect_storage() -> Result<StorageInfo> {
 }
 
 pub fn detect_os() -> Result<OsInfo> {
-    let platform = std::env::consts::OS.to_string();
+    // Normalize platform string to lowercase for consistent comparisons across platforms
+    let platform = std::env::consts::OS.to_lowercase();
 
     // Get kernel version
     let version = fs::read_to_string("/proc/version")
