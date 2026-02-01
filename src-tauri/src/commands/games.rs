@@ -429,55 +429,6 @@ fn generate_tier_fallback_verdict(hardware: &HardwareProfile) -> VerdictResult {
     }
 }
 
-#[allow(dead_code)]
-fn find_db_path() -> Option<String> {
-    use std::path::PathBuf;
-
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    // Check directory of the running executable (handles packaged app layouts)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            // Windows/Linux: database next to executable
-            candidates.push(exe_dir.join("intelligence.db"));
-
-            // Windows/Linux: in resources subfolder
-            candidates.push(exe_dir.join("resources").join("intelligence.db"));
-
-            // Linux AppImage/package: in share directory
-            candidates.push(exe_dir.join("..").join("share").join("specpilot").join("intelligence.db"));
-
-            // macOS: executable is in Contents/MacOS/, resources in Contents/Resources/
-            #[cfg(target_os = "macos")]
-            {
-                candidates.push(exe_dir.join("..").join("Resources").join("intelligence.db"));
-            }
-
-            // Tauri bundles resources relative to the app
-            if let Some(grandparent) = exe_dir.parent() {
-                candidates.push(grandparent.join("resources").join("intelligence.db"));
-                candidates.push(grandparent.join("Resources").join("intelligence.db"));
-            }
-        }
-    }
-
-    // Fallbacks for development layouts (when running via `cargo run` or `npm run tauri dev`)
-    candidates.push(PathBuf::from("intelligence.db"));
-    candidates.push(PathBuf::from("../intelligence.db"));
-    candidates.push(PathBuf::from("src-tauri/intelligence.db"));
-    candidates.push(PathBuf::from("data/intelligence.db"));
-
-    for p in candidates {
-        if p.exists() {
-            if let Some(s) = p.to_str() {
-                return Some(s.to_string());
-            }
-        }
-    }
-
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
