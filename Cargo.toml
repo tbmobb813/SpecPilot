@@ -1,0 +1,8 @@
+[workspace]
+members = ["src-tauri"]
+resolver = "2"
+
+# Root workspace Cargo.toml. This allows cargo commands run from the
+# repository root (e.g., in CI) to automatically operate on the
+# src-tauri crate member.
+

@@ -1,0 +1,187 @@
+import { useState } from 'react';
+import { invokeTauri } from '../api/tauri';
+
+interface CheckAction {
+  label: string;
+  command: string | null;
+}
+
+interface SystemCheck {
+  id: string;
+  name: string;
+  status: 'good' | 'warning' | 'bad' | 'info';
+  message: string;
+  details: string | null;
+  action: CheckAction | null;
+}
+
+interface ReadyUpReport {
+  overall_status: 'good' | 'warning' | 'bad' | 'info';
+  checks: SystemCheck[];
+  summary: string;
+}
+
+export function ReadyUp() {
+  const [report, setReport] = useState<ReadyUpReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const runChecks = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await invokeTauri<ReadyUpReport>('run_readyup_checks');
+      setReport(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'good': return '✓';
+      case 'warning': return '⚠';
+      case 'bad': return '✗';
+      case 'info': return 'ℹ';
+      default: return '?';
+    }
+  };
+
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case 'good': return 'status-good';
+      case 'warning': return 'status-warning';
+      case 'bad': return 'status-bad';
+      case 'info': return 'status-info';
+      default: return '';
+    }
+  };
+
+  /**
+   * Copies a shell command to the user's clipboard for manual execution.
+   *
+   * Security Note: Commands are copied (not executed) to give users control.
+   * The command strings originate from the backend's `run_readyup_checks` command
+   * where they are HARDCODED - not derived from user input, network data, or
+   * database content. This design prevents command injection attacks.
+   *
+   * If the backend is ever modified to generate commands dynamically, this
+   * function should validate commands against an allowlist before copying.
+   * See: src-tauri/src/commands/readyup.rs for the source of these commands.
+   */
+  /**
+   * Copies a command string to the user's clipboard.
+   * 
+   * @param command - The command string to copy to clipboard. This should be a validated
+   * and sanitized string from the backend to prevent command injection attacks.
+   * 
+   * @remarks
+   * This function provides a safer alternative to automatic command execution by requiring
+   * users to manually execute copied commands. However, security depends on backend validation:
+   * - All command strings must be carefully validated and sanitized before being sent to the frontend
+   * - If a malicious actor could influence backend results, command injection attacks are possible
+   * - Currently safe because commands are hardcoded in the backend
+   * - If backend commands become dynamic in the future, implement additional validation/sanitization
+   * 
+   * @throws Logs errors to console if clipboard write fails and shows a fallback alert.
+   * 
+   * @example
+   * ```typescript
+   * await copyCommand('npm install');
+   * ```
+   */
+  const copyCommand = async (command: string) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      window.alert('Command copied to clipboard.');
+    } catch (err) {
+      console.error('Failed to copy command to clipboard', err);
+      window.alert('Failed to copy command to clipboard. Please copy it manually.');
+    }
+  };
+
+  return (
+    <div className="readyup-container">
+      <div className="readyup-header">
+        <h2>ReadyUp</h2>
+        <p className="readyup-subtitle">Pre-launch system check for optimal gaming</p>
+      </div>
+
+      <div className="readyup-actions">
+        <button
+          className="readyup-scan-btn"
+          onClick={runChecks}
+          disabled={loading}
+        >
+          {loading ? 'Checking...' : 'Run System Check'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="readyup-error">
+          <p>Error running checks: {error}</p>
+        </div>
+      )}
+
+      {report && (
+        <div className="readyup-report">
+          <div className={`readyup-summary ${getStatusClass(report.overall_status)}`}>
+            <span className="summary-icon">{getStatusIcon(report.overall_status)}</span>
+            <span className="summary-text">{report.summary}</span>
+          </div>
+
+          <div className="readyup-checks">
+            {report.checks.map((check) => (
+              <div key={check.id} className={`readyup-check ${getStatusClass(check.status)}`}>
+                <div className="check-header">
+                  <span className="check-icon">{getStatusIcon(check.status)}</span>
+                  <span className="check-name">{check.name}</span>
+                </div>
+                <div className="check-body">
+                  <p className="check-message">{check.message}</p>
+                  {check.details && (
+                    <p className="check-details">{check.details}</p>
+                  )}
+                  {check.action && (
+                    <div className="check-action">
+                      {check.action.command ? (
+                        <button
+                          className="action-btn"
+                          onClick={() => copyCommand(check.action!.command!)}
+                          title="Copy command"
+                        >
+                          {check.action.label}
+                        </button>
+                      ) : (
+                        <span className="action-hint">{check.action.label}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!report && !loading && (
+        <div className="readyup-placeholder">
+          <p>Click "Run System Check" to analyze your system before gaming</p>
+          <ul className="check-list-preview">
+            <li>Available RAM</li>
+            <li>Disk Space</li>
+            <li>CPU Load</li>
+            <li>GPU Driver</li>
+            <li>Compositor Status</li>
+            <li>GameMode</li>
+            <li>Proton/Wine</li>
+            <li>Power Profile</li>
+            <li>Background Apps</li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}

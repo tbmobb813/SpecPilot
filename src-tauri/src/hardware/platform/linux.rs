@@ -351,6 +351,7 @@ fn parse_rocm_smi_output(s: &str) -> Option<u64> {
 }
 
 // Parse `nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits` output
+#[allow(dead_code)]
 fn parse_nvidia_smi_output(s: &str) -> Option<u64> {
     // The CSV noheader output is typically a number per line (MB)
     for line in s.lines() {
@@ -364,6 +365,7 @@ fn parse_nvidia_smi_output(s: &str) -> Option<u64> {
 
 // Default runner that executes commands on the host
 #[cfg(test)]
+#[allow(dead_code)]
 fn default_runner(cmd: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(cmd).args(args).output().ok()?;
     Some(String::from_utf8_lossy(&output.stdout).to_string())
@@ -413,6 +415,7 @@ where
 }
 
 // Helper used by tests to exercise parsing logic directly from provided output
+#[allow(dead_code)]
 pub fn detect_vram_from_output(vendor: &GpuVendor, output: Option<&str>) -> Result<u64> {
     match vendor {
         GpuVendor::Nvidia => {

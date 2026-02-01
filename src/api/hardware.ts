@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/tauri';
+// Use dynamic import for Tauri `invoke` so web/dev (Vite) environment doesn't crash
 
 export interface HardwareProfile {
   cpu: CpuInfo;
@@ -98,14 +98,28 @@ export enum GpuTier {
 export type GpuVendor = 'Nvidia' | 'AMD' | 'Intel' | 'Apple' | 'Unknown';
 export type StorageType = 'HDD' | 'SATA_SSD' | 'NVMe_SSD' | 'Unknown';
 
-export async function scanHardware(): Promise<HardwareProfile> {
-  return await invoke('scan_hardware');
+import { invokeTauri } from './tauri';
+
+export async function scanHardware(): Promise<HardwareProfile | null> {
+  try {
+    return await invokeTauri('scan_hardware');
+  } catch {
+    return null;
+  }
 }
 
 export async function getCachedProfile(): Promise<HardwareProfile | null> {
-  return await invoke('get_cached_profile');
+  try {
+    return await invokeTauri('get_cached_profile');
+  } catch {
+    return null;
+  }
 }
 
 export async function saveProfile(profile: HardwareProfile): Promise<void> {
-  return await invoke('save_profile', { profile });
+  try {
+    await invokeTauri('save_profile', { profile });
+  } catch {
+    // noop in non-tauri environment
+  }
 }

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    # Pin to specific Ubuntu version for predictable packages
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Tauri Linux dependencies for Ubuntu 22.04
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libglib2.0-dev \
+            libsoup2.4-dev \
+            libjavascriptcoregtk-4.0-dev \
+            libwebkit2gtk-4.1-dev \
+            libwebkit2gtk-4.0-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install Node dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Build Rust
+        working-directory: src-tauri
+        run: cargo build
+
+      - name: Run Rust tests
+        working-directory: src-tauri
+        # Run Rust tests (tests should be safe for parallel execution)
+        run: cargo test

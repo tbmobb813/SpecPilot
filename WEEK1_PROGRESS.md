@@ -328,14 +328,14 @@ pub fn detect_mesa_version() -> Option<String> {
 - [x] Fixed StorageType enum serialization
 
 ### In Progress 🚧
-- [ ] Database schema implementation
-- [ ] Hardware scrapers (GPUs, CPUs)
-- [ ] Rules engine for game compatibility
+- [x] Database schema implementation ✅ (schema.sql with 7 tables)
+- [x] Hardware scrapers (GPUs, CPUs) ✅ (techpowerup.js, PassMark importers)
+- [x] Rules engine for game compatibility ✅ (rules.rs with full verdict logic)
 
-### Not Started ⏳
-- [ ] ProtonDB integration
-- [ ] Steam Deck compatibility sync
-- [ ] Telemetry collection
+### Completed ✅
+- [x] ProtonDB integration ✅ (protondb.js with API + HTML fallback)
+- [x] Steam Deck compatibility sync ✅ (steamdeck.js - `npm run sync:steamdeck`)
+- [x] Telemetry collection ✅ (TelemetrySettings.tsx + Rust backend)
 
 ---
 

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/tauri';
+import { invokeTauri } from './tauri';
 import { HardwareProfile } from './hardware';
 
 export interface TelemetryReport {
@@ -34,13 +34,13 @@ export function hashHardware(profile: HardwareProfile): string {
 }
 
 export async function submitTelemetry(report: TelemetryReport): Promise<void> {
-  return await invoke('submit_telemetry', { report });
+  return await invokeTauri('submit_telemetry', { report });
 }
 
 export async function getTelemetryEnabled(): Promise<boolean> {
-  return await invoke('get_telemetry_enabled');
+  return await invokeTauri('get_telemetry_enabled');
 }
 
 export async function setTelemetryEnabled(enabled: boolean): Promise<void> {
-  return await invoke('set_telemetry_enabled', { enabled });
+  return await invokeTauri('set_telemetry_enabled', { enabled });
 }
