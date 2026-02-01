@@ -137,10 +137,10 @@ pub async fn browse_games(
                  FROM games g
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
-                 WHERE g.genre LIKE ?
+                 WHERE g.genre LIKE $1
                  ORDER BY g.name
-                 LIMIT ?
-                 OFFSET ?",
+                 LIMIT $2
+                 OFFSET $3",
             )
             .bind(format!("%{}%", genre))
             .bind(limit_val)
@@ -155,10 +155,10 @@ pub async fn browse_games(
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
                  WHERE (g.requirements_parsed IS NULL OR g.requirements_parsed != 1)
-                   AND g.genre LIKE ?
+                   AND g.genre LIKE $1
                  ORDER BY g.name
-                 LIMIT ?
-                 OFFSET ?",
+                 LIMIT $2
+                 OFFSET $3",
             )
             .bind(format!("%{}%", genre))
             .bind(limit_val)
@@ -173,10 +173,10 @@ pub async fn browse_games(
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
                  WHERE g.requirements_parsed = 1
-                   AND g.genre LIKE ?
+                   AND g.genre LIKE $1
                  ORDER BY g.name
-                 LIMIT ?
-                 OFFSET ?",
+                 LIMIT $2
+                 OFFSET $3",
             )
             .bind(format!("%{}%", genre))
             .bind(limit_val)
@@ -195,8 +195,8 @@ pub async fn browse_games(
                  LEFT JOIN proton_compatibility p ON p.game_id = g.id
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
                  ORDER BY g.name
-                 LIMIT ?
-                 OFFSET ?",
+                 LIMIT $1
+                 OFFSET $2",
             )
             .bind(limit_val)
             .bind(offset_val)
@@ -211,8 +211,8 @@ pub async fn browse_games(
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
                  WHERE (g.requirements_parsed IS NULL OR g.requirements_parsed != 1)
                  ORDER BY g.name
-                 LIMIT ?
-                 OFFSET ?",
+                 LIMIT $1
+                 OFFSET $2",
             )
             .bind(limit_val)
             .bind(offset_val)
@@ -227,8 +227,8 @@ pub async fn browse_games(
                  LEFT JOIN steamdeck_compatibility d ON d.steam_id = g.steam_id
                  WHERE g.requirements_parsed = 1
                  ORDER BY g.name
-                 LIMIT ?
-                 OFFSET ?",
+                 LIMIT $1
+                 OFFSET $2",
             )
             .bind(limit_val)
             .bind(offset_val)
