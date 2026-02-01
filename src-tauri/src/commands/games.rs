@@ -321,8 +321,8 @@ pub async fn check_game_compatibility(
     }
 
     // anti-cheat by steam_id
-    let mut anti_ac_type = "".to_string();
-    let mut anti_ac_linux_status = "unknown".to_string();
+    let mut anti_cheat_type = "".to_string();
+    let mut anti_cheat_linux_status = "unknown".to_string();
     if let Some(sid) = game.steam_id {
         if let Ok(row_opt) = sqlx::query("SELECT anti_cheat_type, linux_status FROM anti_cheat_status WHERE steam_id = ?")
             .bind(sid)
@@ -330,20 +330,20 @@ pub async fn check_game_compatibility(
             .await
         {
             if let Some(row) = row_opt {
-                anti_ac_type = row.try_get::<Option<String>, _>("anti_cheat_type").ok().flatten().unwrap_or_default();
-                anti_ac_linux_status = row.try_get::<Option<String>, _>("linux_status").ok().flatten().unwrap_or("unknown".to_string());
+                anti_cheat_type = row.try_get::<Option<String>, _>("anti_cheat_type").ok().flatten().unwrap_or_default();
+                anti_cheat_linux_status = row.try_get::<Option<String>, _>("linux_status").ok().flatten().unwrap_or("unknown".to_string());
             }
         }
     }
 
     // If anti-cheat blocks Linux (denied/broken) or Proton rating is Borked, return early as unplayable
-    let linux_blocking = anti_ac_linux_status.to_lowercase().contains("denied") || anti_ac_linux_status.to_lowercase().contains("broken");
+    let linux_blocking = anti_cheat_linux_status.to_lowercase().contains("denied") || anti_cheat_linux_status.to_lowercase().contains("broken");
     if linux_blocking {
         return Ok(VerdictResult {
             status: "below_minimum".to_string(),
-            confidence: "low".to_string(),
-            summary: format!("Blocked by anti-cheat: {} ({})", anti_ac_type, anti_ac_linux_status),
-            details: vec![format!("AntiCheat: {} ({})", anti_ac_type, anti_ac_linux_status)],
+            confidence: "high".to_string(),
+            summary: format!("Blocked by anti-cheat: {} ({})", anti_cheat_type, anti_cheat_linux_status),
+            details: vec![format!("AntiCheat: {} ({})", anti_cheat_type, anti_cheat_linux_status)],
             min_requirements: None,
             rec_requirements: None,
         });
@@ -351,7 +351,7 @@ pub async fn check_game_compatibility(
     if proton_rating_str.to_lowercase() == "borked" {
         return Ok(VerdictResult {
             status: "below_minimum".to_string(),
-            confidence: "low".to_string(),
+            confidence: "high".to_string(),
             summary: "ProtonDB reports this game as Borked on Linux".to_string(),
             details: vec![format!("ProtonDB rating: {} ({} reports)", proton_rating_str, proton_total_reports)],
             min_requirements: None,
