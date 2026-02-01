@@ -59,6 +59,18 @@ export function ReadyUp() {
     }
   };
 
+  /**
+   * Copies a shell command to the user's clipboard for manual execution.
+   *
+   * Security Note: Commands are copied (not executed) to give users control.
+   * The command strings originate from the backend's `run_readyup_checks` command
+   * where they are HARDCODED - not derived from user input, network data, or
+   * database content. This design prevents command injection attacks.
+   *
+   * If the backend is ever modified to generate commands dynamically, this
+   * function should validate commands against an allowlist before copying.
+   * See: src-tauri/src/commands/readyup.rs for the source of these commands.
+   */
   const copyCommand = async (command: string) => {
     try {
       await navigator.clipboard.writeText(command);

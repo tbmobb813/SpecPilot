@@ -20,6 +20,23 @@ pub enum CheckStatus {
     Info,
 }
 
+/// Action that can be taken to resolve a check issue.
+///
+/// # Security Considerations
+///
+/// The `command` field contains shell commands that the frontend copies to the user's
+/// clipboard for manual execution. These commands are **hardcoded** in this module and
+/// are NOT derived from any external input (user data, network responses, database, etc.).
+///
+/// If this design changes in the future to allow dynamic command generation, ensure:
+/// 1. Commands are validated against an allowlist of safe operations
+/// 2. No user-controlled data is interpolated into command strings
+/// 3. Shell metacharacters are properly escaped if any dynamic values are needed
+///
+/// Current hardcoded commands:
+/// - `ps aux --sort=-%mem | head -10` (memory check)
+/// - `gamemoderun` (GameMode hint)
+/// - `powerprofilesctl set performance` (power profile)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckAction {
     pub label: String,

@@ -27,9 +27,13 @@ function sleep(ms) {
 }
 
 /**
- * Fetch game details from Steam API
+ * Fetch game details from Steam API with exponential backoff retry
  */
-async function fetchSteamDetails(appId) {
+async function fetchSteamDetails(appId, retryCount = 0) {
+  const MAX_RETRIES = 3;
+  const BASE_BACKOFF_MS = 30000; // 30 seconds
+  const MAX_BACKOFF_MS = 300000; // 5 minutes
+
   try {
     const url = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=english`;
     const resp = await axios.get(url, {
@@ -47,8 +51,15 @@ async function fetchSteamDetails(appId) {
     return resp.data[appId].data;
   } catch (err) {
     if (err.response && err.response.status === 429) {
-      console.warn(`Rate limited on app ${appId}, waiting 30s...`);
-      await sleep(30000);
+      if (retryCount >= MAX_RETRIES) {
+        console.warn(`Rate limited on app ${appId}, max retries (${MAX_RETRIES}) exceeded`);
+        return null;
+      }
+
+      const backoffMs = Math.min(BASE_BACKOFF_MS * Math.pow(2, retryCount), MAX_BACKOFF_MS);
+      console.warn(`Rate limited on app ${appId}, retry ${retryCount + 1}/${MAX_RETRIES} after ${backoffMs / 1000}s...`);
+      await sleep(backoffMs);
+      return fetchSteamDetails(appId, retryCount + 1);
     }
     return null;
   }
