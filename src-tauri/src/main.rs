@@ -26,6 +26,7 @@ fn main() {
             commands::browse_games,
             commands::check_game_compatibility,
             commands::run_readyup_checks,
+            commands::detect_steam_library,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

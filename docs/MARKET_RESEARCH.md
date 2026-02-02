@@ -60,6 +60,7 @@ SpecPilot enters a market with **no direct competition** for Linux/Steam Deck ga
 ### Key Insight: The Gap
 
 **No tool combines:**
+
 - Hardware detection + requirement matching
 - Proton/Wine compatibility data
 - Steam Deck verification status
@@ -74,12 +75,14 @@ SpecPilot enters a market with **no direct competition** for Linux/Steam Deck ga
 ### 1. Steam Deck Verified Labels Are Unreliable
 
 **Evidence:**
+
 - ["Valve, your verified games don't work"](https://steamcommunity.com/app/1675200/discussions/0/3771239453234058835/) - Steam forum thread
 - ["List of verified games that does not work... WHY???"](https://steamcommunity.com/app/1675200/discussions/0/3273566073558135009/) - Steam forum
 - [Some Steam Deck Verified Games Aren't Working Well](https://techraptor.net/gaming/news/some-steam-deck-verified-games-arent-working-well-players-say) - TechRaptor
 - ["Steam Deck Verified Games Won't Stop Breaking"](https://www.howtogeek.com/867721/steam-deck-verified-games-wont-stop-breaking/) - How-To Geek
 
 **Specific Examples of Broken "Verified" Games:**
+
 - Apex Legends - no button response on default config
 - God of War - stuttering, hard locks requiring restarts
 - Horizon Zero Dawn - thermal throttling, refund-worthy performance
@@ -89,6 +92,7 @@ SpecPilot enters a market with **no direct competition** for Linux/Steam Deck ga
 - EA games - many broke after launcher update (Dec 2024)
 
 **Root Causes:**
+
 - Ratings based on Valve contractor testing, not real user feedback
 - No automatic re-testing when devs push updates
 - Status updates lag behind reality
@@ -99,11 +103,13 @@ SpecPilot enters a market with **no direct competition** for Linux/Steam Deck ga
 ### 2. Traditional "Can You Run It" Tools Have Major Flaws
 
 **Hardware Detection Problems:**
+
 - [Often misreads specs](https://www.digitaltrends.com/computing/how-to-check-if-your-pc-meets-a-games-system-requirements/) - especially Nvidia Optimus laptops
 - "Steam never picked up my card and instead always sees the Intel integrated graphics"
 - Requires browser plugins that users distrust
 
 **Inaccurate Results:**
+
 - Called ["a terrible website"](https://steamcommunity.com/app/255710/discussions/0/611698195170375047) by users
 - One user: "System Requirements Lab said I couldn't run XCOM at all. Bought it anyway, runs fine."
 - Requirements themselves are ["garbage data"](https://steamcommunity.com/discussions/forum/10/6026443283693462048/) - no standard for what "minimum" means
@@ -114,11 +120,13 @@ SpecPilot enters a market with **no direct competition** for Linux/Steam Deck ga
 ### 3. ProtonDB Is Great But Incomplete
 
 **Strengths:**
+
 - Community-driven, covers most Steam games
 - Shows Proton version compatibility
 - Platinum/Gold/Silver/Bronze/Borked ratings
 
 **Weaknesses:**
+
 - No hardware requirement matching whatsoever
 - Inconsistent reporting quality
 - Users must manually combine ProtonDB + requirements + Deck status
@@ -127,6 +135,7 @@ SpecPilot enters a market with **no direct competition** for Linux/Steam Deck ga
 ### 4. Fragmented Information Landscape
 
 **Current Linux Gamer Workflow:**
+
 1. Check ProtonDB for Proton compatibility
 2. Check Steam Deck Verified status
 3. Check PCGamingWiki for requirements
@@ -139,6 +148,7 @@ SpecPilot enters a market with **no direct competition** for Linux/Steam Deck ga
 ### 5. Anti-Cheat Remains a Hard Blocker
 
 Games that don't work regardless of hardware:
+
 - Destiny 2
 - Fortnite
 - Recent Call of Duty titles
@@ -217,16 +227,19 @@ Users need clear, upfront warnings about these blockers.
 ## Risk Factors
 
 ### Technical Risks
+
 - Hardware detection edge cases (exotic GPUs, ARM devices)
 - Data accuracy depends on community contributions
 - Anti-cheat landscape changes rapidly
 
 ### Market Risks
+
 - Valve could improve Deck Verified system (but haven't for 3+ years)
 - ProtonDB could add hardware matching (would validate our thesis)
 - Windows competitors could add Linux support (unlikely given their business model)
 
 ### Competitive Moat
+
 - First-mover advantage in growing market
 - Community data accumulation creates network effects
 - Linux-first positioning difficult for Windows-centric competitors to replicate
@@ -237,6 +250,7 @@ Users need clear, upfront warnings about these blockers.
 ## Success Metrics
 
 ### MVP Phase (3 months)
+
 - 100 games with verified requirements
 - 1,000+ user hardware reports
 - 95%+ verdict accuracy
@@ -244,6 +258,7 @@ Users need clear, upfront warnings about these blockers.
 - Featured on GamingOnLinux
 
 ### Growth Phase (6 months)
+
 - 1,000+ games covered
 - 10,000+ active users
 - #1 result for "Steam Deck game checker"
@@ -251,6 +266,7 @@ Users need clear, upfront warnings about these blockers.
 - r/SteamDeck sidebar listing
 
 ### Market Leader Phase (12 months)
+
 - 5,000+ games covered
 - 50,000+ active users
 - ProtonDB partnership or integration
@@ -262,6 +278,7 @@ Users need clear, upfront warnings about these blockers.
 ## Conclusion
 
 SpecPilot enters a market with:
+
 - **Clear unmet need** - Linux gamers have no unified compatibility tool
 - **Growing audience** - 52% YoY growth in Linux gaming
 - **Vocal frustration** - documented complaints about current solutions

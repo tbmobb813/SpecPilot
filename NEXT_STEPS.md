@@ -32,17 +32,16 @@ npm run tauri dev
 
 **Test checklist:**
 
-- [ ] CPU detected correctly
-- [ ] GPU detected correctly
-- [ ] RAM amount correct
-- [ ] Storage capacity correct
-- [ ] VRAM shows correctly (if NVIDIA)
-- [ ] Driver version shows
-- [ ] Tier classification makes sense
+- [x] CPU detected correctly
+- [x] GPU detected correctly
+- [x] RAM amount correct
+- [x] Storage capacity correct
+- [x] VRAM shows correctly (NVIDIA + AMD)
+- [x] Driver version shows
+- [x] Tier classification makes sense
 
 **Known issues to expect:**
 
-- ⚠️ AMD GPU VRAM shows 0 MB (not implemented yet)
 - ⚠️ DirectX shows placeholder on Windows (needs proper detection)
 - ⚠️ Some tier classifications may be off (needs database refinement)
 
@@ -70,36 +69,16 @@ npm run tauri dev
 
 **File to edit:** `src-tauri/src/hardware/platform/linux.rs`
 
-**Current code:**
+**Status:** ✅ Fully implemented in `src-tauri/src/hardware/platform/linux.rs`
 
-```rust
-fn detect_vram(vendor: &GpuVendor) -> Result<u64> {
-    match vendor {
-        GpuVendor::AMD => {
-            // ❌ Not implemented yet
-        }
-        // ...
-    }
-    Ok(0) // Returns 0 for AMD
-}
-```
+- `detect_vram` now inspects sysfs (`mem_info_vram_total`, `memory_info_vram_total`, `/sys/kernel/debug`), parses PCI resource files, calls `rocm-smi`/`radeontop`, and uses `glxinfo` as a last resort.
+- Detection metadata is preserved so UI can report confidence.
 
-**Solution:**
+**Test:**
 
-```rust
-GpuVendor::AMD => {
-    // Parse sysfs
-    let glob_pattern = "/sys/class/drm/card*/device/mem_info_vram_total";
-    for entry in glob::glob(glob_pattern)? {
-        if let Ok(path) = entry {
-            if let Ok(vram_str) = fs::read_to_string(path) {
-                if let Ok(vram_bytes) = vram_str.trim().parse::<u64>() {
-                    return Ok(vram_bytes / (1024 * 1024)); // Bytes to MB
-                }
-            }
-        }
-    }
-}
+```bash
+cd src-tauri
+cargo test hardware::platform::linux::test_detect_vram_with_runner
 ```
 
 **Test:**
@@ -120,95 +99,28 @@ glob = "0.3"
 
 ---
 
-### Priority 2: Add Unit Tests
+### Priority 2: Unit Tests
 
-**Create:** `src-tauri/tests/tier_classification.rs`
+**Status:** ✅ Added and maintained in `src-tauri/src/hardware/platform/linux.rs` and `src-tauri/src/commands/games.rs`
 
-```rust
-#[cfg(test)]
-mod tests {
-    use crate::hardware::{classify_cpu_tier, classify_gpu_tier, CpuTier, GpuTier};
-
-    #[test]
-    fn test_classify_nvidia_4090() {
-        let tier = classify_gpu_tier("NVIDIA GeForce RTX 4090");
-        assert_eq!(tier, GpuTier::Ultra);
-    }
-
-    #[test]
-    fn test_classify_amd_integrated() {
-        let tier = classify_gpu_tier("AMD Radeon Vega 8 Graphics");
-        assert_eq!(tier, GpuTier::Integrated);
-    }
-
-    #[test]
-    fn test_classify_intel_i9() {
-        let tier = classify_cpu_tier("Intel Core i9-13900K");
-        assert_eq!(tier, CpuTier::Enthusiast);
-    }
-
-    #[test]
-    fn test_classify_ryzen_5() {
-        let tier = classify_cpu_tier("AMD Ryzen 5 5600X");
-        assert_eq!(tier, CpuTier::Mainstream);
-    }
-}
-```
+- `hardware::platform::linux` now has tests covering AMD/Nvidia detection helpers, parsing utilities, and fallback runners that can be injected.
+- `commands::games::check_game_compatibility` has schema-aware fixtures and asserts covering ProtonDB/anti-cheat interactions.
 
 **Run tests:**
 
 ```bash
 cd src-tauri
-cargo test
+cargo test --lib
 ```
 
 ---
 
 ### Priority 3: OpenGL Detection (Linux)
 
-**File to edit:** `src-tauri/src/hardware/platform/linux.rs`
+**Status:** ✅ `detect_opengl` is implemented in `src-tauri/src/hardware/platform/linux.rs` and wired into `GraphicsApiSupport`.
 
-**Add function:**
-
-```rust
-pub fn detect_opengl() -> Result<Option<OpenGLSupport>> {
-    let output = Command::new("glxinfo")
-        .arg("-B")
-        .output();
-
-    if output.is_err() {
-        return Ok(None);
-    }
-
-    let output = output.unwrap();
-    let info = String::from_utf8_lossy(&output.stdout);
-
-    let version = info
-        .lines()
-        .find(|line| line.contains("OpenGL version"))
-        .and_then(|line| line.split(':').nth(1))
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "Unknown".into());
-
-    Ok(Some(OpenGLSupport { version }))
-}
-```
-
-**Update mod.rs:**
-
-```rust
-pub fn scan_system() -> Result<HardwareProfile> {
-    // ... existing code ...
-
-    let graphics_api = GraphicsApiSupport {
-        vulkan: platform_impl::detect_vulkan()?,
-        opengl: platform_impl::detect_opengl()?,  // ← Add this
-        // ... rest
-    };
-
-    // ... rest
-}
-```
+- `glxinfo` output is parsed for OpenGL version lines and the support struct is included in the hardware scan response.
+- The frontend consumes this signature so the UI can show the detected OpenGL driver version alongside Vulkan.
 
 ---
 
@@ -286,32 +198,13 @@ npm run scrape:gpus -- --full       # Full scrape (2000+)
 
 ### Step 3: ProtonDB Integration
 
-**Create:** `scripts/sync/protondb.ts`
-
-```typescript
-async function syncProtonDB() {
-  const response = await fetch(
-    'https://www.protondb.com/api/v1/reports/summaries/latest.json'
-  );
-  const data = await response.json();
-
-  for (const [appId, report] of Object.entries(data)) {
-    await db.proton_compatibility.upsert({
-      game_id: appId,
-      protondb_rating: report.tier,
-      total_reports: report.total,
-      last_synced: new Date()
-    });
-  }
-
-  console.log(`Synced ${Object.keys(data).length} games from ProtonDB`);
-}
-```
+**Status:** ✅ Aggregated sync script already exists (`scripts/sync/protondb.js`), probes ProtonDB, ProtonDB bdefore mirror, and CDN endpoints, then falls back to HTML scraping. Manual import of the downloaded tarball uses `scripts/sync/import_protondb_json.js` to upsert summaries.
 
 **Run sync:**
 
 ```bash
-npm run sync:protondb
+npm run sync:protondb    # tries aggregated endpoints + fallback
+node scripts/sync/import_protondb_json.js /tmp/protondb-data/reports_piiremoved.json
 ```
 
 ---
@@ -369,6 +262,8 @@ cargo test intelligence::rules
 ---
 
 ### Step 5: Add Top 100 Games (Manual)
+
+**Status:** ✅ `data/games-top-100.json` exists and feeds `scripts/sync/protondb_apps.js` (scrapes per-app pages). This seeder added 100 ProtonDB entries during today's run, so the DB now has real `proton_compatibility` data.
 
 **Create:** `data/games-top-100.json`
 

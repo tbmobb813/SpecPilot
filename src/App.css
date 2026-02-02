@@ -647,9 +647,76 @@
 }
 
 .library-header h2 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 1rem 0;
   color: #333;
   font-size: 1.8rem;
+}
+
+/* Library Mode Toggle */
+.library-mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.mode-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  color: #666;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-button:hover:not(:disabled) {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.mode-button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+}
+
+.mode-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mode-button .count-badge {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+}
+
+.mode-button.active .count-badge {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Steam Library Status */
+.steam-status {
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  margin: 0;
+}
+
+.steam-status.detecting {
+  color: #6366f1;
+}
+
+.steam-status.found {
+  color: #22c55e;
+}
+
+.steam-status.not-found {
+  color: #6b7280;
 }
 
 .hardware-warning {

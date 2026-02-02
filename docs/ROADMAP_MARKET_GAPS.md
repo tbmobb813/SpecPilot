@@ -74,17 +74,18 @@ This document maps **consumer pain points** (from MARKET_RESEARCH.md) to **speci
 
 #### 2.1 Fix AMD GPU VRAM Detection (CRITICAL)
 
-**Current State:** Returns 0 MB on Linux
-**Effort:** 4-8 hours
+**Current State:** Implemented across `src-tauri/src/hardware/platform/linux.rs` with multiple fallbacks and metadata reporting.
+**Effort:** 4-8 hours (completed)
 
 **Implementation:**
 
 ```rust
 // In src-tauri/src/hardware/platform/linux.rs
-// Add sysfs parsing for AMD GPUs:
-// /sys/class/drm/card*/device/mem_info_vram_total
-// Fallback: parse from rocm-smi output
+// Detect VRAM via sysfs entries (mem_info_vram_total, memory_info_vram_total, debug clusters)
+// Fallback parsing uses PCI BAR resources, `rocm-smi`, `radeontop`, then `glxinfo`.
 ```
+
+**Result:** Detection now reports AMD VRAM in MB, includes `DetectionMetadata`, and tests cover each parser.
 
 #### 2.2 Expand Linux Hardware Detection (HIGH PRIORITY)
 
@@ -135,31 +136,24 @@ enum LinuxBottleneck {
 
 #### 3.1 Integrate ProtonDB into Verdict Engine (CRITICAL)
 
-**Current State:** Scraper written, data not used in verdicts
-**Effort:** 1-2 days
+**Current State:** Implemented - `rules.rs` now reads ProtonDB ratings/anti-cheat data, adjusts bottlenecks/confidence, and exposes summaries to the frontend.
+**Effort:** 1-2 days (completed)
 
 **Implementation:**
 
 ```rust
-// In rules.rs, add ProtonDB factor:
-fn evaluate_proton_compatibility(&self, game_id: u64) -> ProtonFactor {
-    let rating = db.query_protondb_rating(game_id);
-    match rating {
-        "Platinum" | "Gold" => ProtonFactor::Positive,
-        "Silver" => ProtonFactor::Neutral,
-        "Bronze" => ProtonFactor::Warning("May require tweaks"),
-        "Borked" => ProtonFactor::Blocker("Does not work on Linux"),
-        _ => ProtonFactor::Unknown,
-    }
-}
+// In rules.rs, ProtonDB rating and anti-cheat status already feed the `bottlenecks` vector
+// and the `linux_summary`, so verdict narratives explain when ProtonDB reports issues.
 ```
 
 **Verdict adjustment:**
 
-- Platinum/Gold: No penalty
-- Silver: Add warning, reduce confidence
-- Bronze: Major warning, suggest checking ProtonDB for tweaks
-- Borked: Override to "Unsupported" regardless of hardware
+- Platinum/Gold: No penalty; adds tip blocks
+- Silver: Warns about tweaks and dims confidence (0.85x)
+- Bronze: Adds major issue bottleneck and reduces confidence
+- Borked: Critical bottleneck to block Linux play
+
+**Notes:** `scripts/sync/protondb.js` (and the manual `import_protondb_json.js`) populate `proton_compatibility`, and `scripts/sync/protondb_apps.js` keeps the top 100 seeded.
 
 #### 3.2 Show Required Proton Tweaks (HIGH PRIORITY)
 

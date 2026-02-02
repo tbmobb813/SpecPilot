@@ -6,9 +6,11 @@
  * and stores it in the steamdeck_compatibility table.
  *
  * Usage:
- *   npm run sync:steamdeck              # Sync all games in DB
- *   npm run sync:steamdeck -- --limit=100  # Sync first 100 games
- *   npm run sync:steamdeck -- --appid=1091500  # Sync specific app
+ *   npm run sync:steamdeck                    # Sync all games in DB
+ *   npm run sync:steamdeck -- --popular       # Sync only games with ProtonDB reports (~30k)
+ *   npm run sync:steamdeck -- --limit=100     # Sync first 100 games
+ *   npm run sync:steamdeck -- --appid=1091500 # Sync specific app
+ *   npm run sync:steamdeck -- --popular --limit=1000  # Combine flags
  */
 
 const axios = require('axios');
@@ -27,7 +29,8 @@ function sleep(ms) {
 }
 
 /**
- * Fetch Steam Deck compatibility status from Steam API with exponential backoff retry
+ * Fetch Steam Deck compatibility status from Steam's Deck compatibility API
+ * Uses the ajaxgetdeckappcompatibilityreport endpoint which has the actual Deck data
  */
 async function fetchDeckStatus(appId, retryCount = 0) {
   const MAX_RETRIES = 3;
@@ -35,7 +38,7 @@ async function fetchDeckStatus(appId, retryCount = 0) {
   const MAX_BACKOFF_MS = 300000; // 5 minutes
 
   try {
-    const url = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
+    const url = `https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=${appId}`;
     const resp = await axios.get(url, {
       timeout: 15000,
       headers: {
@@ -43,22 +46,19 @@ async function fetchDeckStatus(appId, retryCount = 0) {
       }
     });
 
-    if (!resp.data || !resp.data[appId] || !resp.data[appId].success) {
+    if (!resp.data || resp.data.success !== 1 || !resp.data.results) {
       return null;
     }
 
-    const data = resp.data[appId].data;
-
-    // Extract deck compatibility info
-    const deckCompat = data.steam_deck_compatibility || {};
+    const results = resp.data.results;
 
     let status = 'unknown';
     let tested = false;
     let notes = null;
 
-    if (deckCompat.category !== undefined) {
-      // Category values: 0 = Unknown, 1 = Unsupported, 2 = Playable, 3 = Verified
-      switch (deckCompat.category) {
+    // resolved_category: 0 = Unknown, 1 = Unsupported, 2 = Playable, 3 = Verified
+    if (results.resolved_category !== undefined) {
+      switch (results.resolved_category) {
         case 3:
           status = 'verified';
           tested = true;
@@ -77,19 +77,30 @@ async function fetchDeckStatus(appId, retryCount = 0) {
       }
     }
 
-    // Get test results/notes if available
-    if (deckCompat.test_results && Array.isArray(deckCompat.test_results)) {
-      notes = deckCompat.test_results
-        .map(r => r.display || r.descriptor)
-        .filter(Boolean)
-        .join('; ');
+    // Extract test result notes from loc_tokens
+    if (results.resolved_items && Array.isArray(results.resolved_items)) {
+      const notesList = results.resolved_items
+        .map(item => {
+          // Convert loc_token to readable text
+          // e.g. "#SteamDeckVerified_TestResult_DefaultControllerConfigFullyFunctional"
+          const token = item.loc_token || '';
+          return token
+            .replace('#SteamDeckVerified_TestResult_', '')
+            .replace('#SteamOS_TestResult_', '')
+            .replace(/([A-Z])/g, ' $1')
+            .trim();
+        })
+        .filter(Boolean);
+
+      if (notesList.length > 0) {
+        notes = notesList.join('; ');
+      }
     }
 
     return {
       status,
       tested,
-      notes,
-      name: data.name
+      notes
     };
   } catch (err) {
     if (err.response && err.response.status === 429) {
@@ -103,7 +114,7 @@ async function fetchDeckStatus(appId, retryCount = 0) {
       await sleep(backoffMs);
       return fetchDeckStatus(appId, retryCount + 1);
     }
-    
+
     if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
       if (retryCount < MAX_RETRIES) {
         const backoffMs = Math.min(BASE_BACKOFF_MS * Math.pow(2, retryCount), MAX_BACKOFF_MS);
@@ -112,7 +123,7 @@ async function fetchDeckStatus(appId, retryCount = 0) {
         return fetchDeckStatus(appId, retryCount + 1);
       }
     }
-    
+
     return null;
   }
 }
@@ -144,12 +155,15 @@ async function main() {
   const args = process.argv.slice(2);
   let limit = null;
   let specificAppId = null;
+  let popularOnly = false;
 
   for (const arg of args) {
     if (arg.startsWith('--limit=')) {
       limit = parseInt(arg.split('=')[1], 10);
     } else if (arg.startsWith('--appid=')) {
       specificAppId = arg.split('=')[1];
+    } else if (arg === '--popular') {
+      popularOnly = true;
     }
   }
 
@@ -183,6 +197,21 @@ async function main() {
     let games;
     if (specificAppId) {
       games = db.prepare('SELECT id, steam_id, name FROM games WHERE steam_id = ?').all(specificAppId);
+    } else if (popularOnly) {
+      // Only sync games that have actual ProtonDB reports (not 'unknown')
+      let query = `
+        SELECT g.id, g.steam_id, g.name
+        FROM games g
+        JOIN proton_compatibility p ON g.id = p.game_id
+        WHERE g.steam_id IS NOT NULL
+          AND p.protondb_rating != 'unknown'
+        ORDER BY p.total_reports DESC
+      `;
+      if (limit) {
+        query += ` LIMIT ${limit}`;
+      }
+      games = db.prepare(query).all();
+      console.log(`Syncing popular games only (with ProtonDB reports)...`);
     } else {
       let query = 'SELECT id, steam_id, name FROM games WHERE steam_id IS NOT NULL';
       if (limit) {

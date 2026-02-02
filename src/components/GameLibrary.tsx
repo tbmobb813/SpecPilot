@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { invokeTauri } from '../api/tauri';
 import { HardwareProfile } from '../api/hardware';
 import { UnifiedVerdictDashboard } from './UnifiedVerdictDashboard';
+import { detectSteamLibrary, SteamLibraryResult } from '../api/steam';
 
 interface GameResult {
   steam_id: number;
@@ -38,6 +39,7 @@ interface GameLibraryProps {
 }
 
 type VerdictFilter = 'all' | 'can_run' | 'minimum' | 'wont_run';
+type LibraryMode = 'all' | 'my_library';
 
 export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const [games, setGames] = useState<GameResult[]>([]);
@@ -48,12 +50,39 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
   const [checkingGame, setCheckingGame] = useState<number | null>(null);
 
+  // Steam Library
+  const [steamLibrary, setSteamLibrary] = useState<SteamLibraryResult | null>(null);
+  const [installedGameIds, setInstalledGameIds] = useState<Set<number>>(new Set());
+  const [libraryMode, setLibraryMode] = useState<LibraryMode>('all');
+  const [steamDetecting, setSteamDetecting] = useState(false);
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>('all');
   const [genreFilter, setGenreFilter] = useState<string>('all');
+  const [protonFilter, setProtonFilter] = useState<string>('all');
   const [hideAntiCheatBlocked, setHideAntiCheatBlocked] = useState(false);
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
+
+  // Detect Steam library on mount
+  useEffect(() => {
+    detectSteamLibraryAsync();
+  }, []);
+
+  const detectSteamLibraryAsync = async () => {
+    setSteamDetecting(true);
+    try {
+      const result = await detectSteamLibrary();
+      if (result) {
+        setSteamLibrary(result);
+        setInstalledGameIds(new Set(result.installed_games.map(g => g.app_id)));
+      }
+    } catch (e) {
+      console.error('Failed to detect Steam library:', e);
+    } finally {
+      setSteamDetecting(false);
+    }
+  };
 
   // Load all games on mount and whenever `hardwareProfile` changes so
   // compatibility verdicts are computed for the current hardware.
@@ -157,6 +186,11 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
   const applyFilters = useCallback(() => {
     let filtered = [...games];
 
+    // Library mode filter (My Library vs All Games)
+    if (libraryMode === 'my_library' && installedGameIds.size > 0) {
+      filtered = filtered.filter(g => installedGameIds.has(g.steam_id));
+    }
+
     // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -183,6 +217,13 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
       });
     }
 
+    // ProtonDB rating filter
+    if (protonFilter !== 'all') {
+      filtered = filtered.filter(g =>
+        g.protondb_rating?.toLowerCase() === protonFilter.toLowerCase()
+      );
+    }
+
     // Genre filter
     if (genreFilter !== 'all') {
       filtered = filtered.filter(g =>
@@ -196,14 +237,14 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     }
 
     setFilteredGames(filtered);
-  }, [games, searchQuery, verdictFilter, genreFilter, hideAntiCheatBlocked, hardwareProfile]);
+  }, [games, searchQuery, verdictFilter, genreFilter, protonFilter, hideAntiCheatBlocked, hardwareProfile, libraryMode, installedGameIds]);
 
   // Call applyFilters whenever inputs or the callback identity change.
   // `applyFilters` depends on `hardwareProfile`, so include it indirectly
   // by depending on the stable `applyFilters` reference.
   useEffect(() => {
     applyFilters();
-  }, [games, searchQuery, verdictFilter, genreFilter, hideAntiCheatBlocked, applyFilters]);
+  }, [games, searchQuery, verdictFilter, genreFilter, protonFilter, hideAntiCheatBlocked, libraryMode, installedGameIds, applyFilters]);
 
   const checkGameCompatibility = async (game: GameResult) => {
     if (!hardwareProfile) {
@@ -363,6 +404,45 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     <div className="game-library">
       <div className="library-header">
         <h2>🎮 Game Library</h2>
+
+        {/* Library Mode Toggle */}
+        <div className="library-mode-toggle">
+          <button
+            className={`mode-button ${libraryMode === 'my_library' ? 'active' : ''}`}
+            onClick={() => setLibraryMode('my_library')}
+            disabled={installedGameIds.size === 0}
+            title={installedGameIds.size === 0 ? 'Steam library not detected' : `${installedGameIds.size} installed games`}
+          >
+            📂 My Library
+            {installedGameIds.size > 0 && (
+              <span className="count-badge">{installedGameIds.size}</span>
+            )}
+          </button>
+          <button
+            className={`mode-button ${libraryMode === 'all' ? 'active' : ''}`}
+            onClick={() => setLibraryMode('all')}
+          >
+            🌐 All Games
+            <span className="count-badge">{games.length}</span>
+          </button>
+        </div>
+
+        {/* Steam Library Status */}
+        {steamDetecting && (
+          <p className="steam-status detecting">🔍 Detecting Steam library...</p>
+        )}
+        {!steamDetecting && steamLibrary && (
+          <p className="steam-status found">
+            ✅ Steam detected: {steamLibrary.total_games} games installed
+            {steamLibrary.library_folders.length > 1 && ` (${steamLibrary.library_folders.length} libraries)`}
+          </p>
+        )}
+        {!steamDetecting && !steamLibrary && (
+          <p className="steam-status not-found">
+            ℹ️ Steam not detected - showing all games in database
+          </p>
+        )}
+
         {!hardwareProfile && (
           <p className="hardware-warning">
             ⚠️ Scan your hardware in "My Hardware" tab for personalized compatibility results
@@ -390,10 +470,25 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
             onChange={(e) => setVerdictFilter(e.target.value as VerdictFilter)}
             disabled={!hardwareProfile}
           >
-            <option value="all">All Games</option>
+            <option value="all">All</option>
             <option value="can_run">✅ Can Run Well</option>
             <option value="minimum">🟡 Meets Minimum</option>
             <option value="wont_run">❌ Won't Run</option>
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label>ProtonDB:</label>
+          <select
+            value={protonFilter}
+            onChange={(e) => setProtonFilter(e.target.value)}
+          >
+            <option value="all">All Ratings</option>
+            <option value="platinum">🥇 Platinum</option>
+            <option value="gold">🥈 Gold</option>
+            <option value="silver">🥉 Silver</option>
+            <option value="bronze">Bronze</option>
+            <option value="borked">❌ Borked</option>
           </select>
         </div>
 
@@ -422,7 +517,7 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
         </div>
 
         <div className="filter-stats">
-          Showing {filteredGames.length} of {games.length} games
+          Showing {filteredGames.length} of {libraryMode === 'my_library' ? installedGameIds.size : games.length} games
         </div>
       </div>
 

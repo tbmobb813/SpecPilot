@@ -11,10 +11,20 @@ async function main() {
     console.log('Fetching ProtonDB summaries...');
 
     const candidates = [
+      // Official/proxied JSON endpoints (try multiple hosts/paths)
       'https://www.protondb.com/api/v1/reports/summaries/latest.json',
-      'https://www.protondb.com/api/v1/reports/summaries.json',
-      'https://www.protondb.com/api/v1/reviews/summaries/latest.json',
+      'https://protondb.com/api/v1/reports/summaries/latest.json',
+      'https://data.protondb.com/reports/summaries/latest.json',
+
+      // Raw GitHub mirrors (try main branch and CDN)
+      'https://raw.githubusercontent.com/ProtonDB/protondb-data/main/reports/summaries/latest.json',
+      // bdefore fork mirror (useful if ProtonDB upstream paths change)
+      'https://raw.githubusercontent.com/bdefore/protondb-data/main/reports/summaries/latest.json',
+      'https://cdn.jsdelivr.net/gh/bdefore/protondb-data@main/reports/summaries/latest.json',
       'https://raw.githubusercontent.com/ProtonDB/protondb-data/master/reports/summaries/latest.json',
+      'https://cdn.jsdelivr.net/gh/ProtonDB/protondb-data@main/reports/summaries/latest.json',
+
+      // Older/alternate paths for compatibility
       'https://raw.githubusercontent.com/ProtonDB/proton-db/master/reports/summaries/latest.json',
       'https://raw.githubusercontent.com/ProtonDB/reports/master/summaries/latest.json',
       'https://head.protondb.pages.dev/reports/summaries/latest.json'
