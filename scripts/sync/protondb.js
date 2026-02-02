@@ -1,164 +1,231 @@
 #!/usr/bin/env node
+/**
+ * ProtonDB Sync Script (Supabase version)
+ *
+ * Fetches ProtonDB summaries and stores them in Supabase.
+ *
+ * Usage:
+ *   npm run sync:protondb
+ *   npm run sync:protondb -- --limit=1000
+ */
+
 const axios = require('axios');
-const Database = require('better-sqlite3');
+const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 
-const dbPath = path.join(__dirname, '..', '..', 'src-tauri', 'intelligence.db');
-const db = new Database(dbPath);
+// Load environment variables
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env.local') });
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+
+const UPSERT_BATCH_SIZE = 500;
 
 async function main() {
+  const args = process.argv.slice(2);
+  let limit = null;
+
+  for (const arg of args) {
+    if (arg.startsWith('--limit=')) {
+      limit = parseInt(arg.split('=')[1], 10);
+    }
+  }
+
+  // Initialize Supabase
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Error: Missing Supabase credentials');
+    console.log('Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env.local');
+    process.exit(1);
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false }
+  });
+
+  console.log('Connected to Supabase:', supabaseUrl);
+
   try {
     console.log('Fetching ProtonDB summaries...');
 
     const candidates = [
-      // Official/proxied JSON endpoints (try multiple hosts/paths)
       'https://www.protondb.com/api/v1/reports/summaries/latest.json',
       'https://protondb.com/api/v1/reports/summaries/latest.json',
-      'https://data.protondb.com/reports/summaries/latest.json',
-
-      // Raw GitHub mirrors (try main branch and CDN)
-      'https://raw.githubusercontent.com/ProtonDB/protondb-data/main/reports/summaries/latest.json',
-      // bdefore fork mirror (useful if ProtonDB upstream paths change)
       'https://raw.githubusercontent.com/bdefore/protondb-data/main/reports/summaries/latest.json',
       'https://cdn.jsdelivr.net/gh/bdefore/protondb-data@main/reports/summaries/latest.json',
-      'https://raw.githubusercontent.com/ProtonDB/protondb-data/master/reports/summaries/latest.json',
-      'https://cdn.jsdelivr.net/gh/ProtonDB/protondb-data@main/reports/summaries/latest.json',
-
-      // Older/alternate paths for compatibility
-      'https://raw.githubusercontent.com/ProtonDB/proton-db/master/reports/summaries/latest.json',
-      'https://raw.githubusercontent.com/ProtonDB/reports/master/summaries/latest.json',
-      'https://head.protondb.pages.dev/reports/summaries/latest.json'
     ];
 
     let resp = null;
     let usedUrl = null;
+
     for (const u of candidates) {
       try {
-        resp = await axios.get(u, { timeout: 20000 });
+        resp = await axios.get(u, { timeout: 30000 });
         if (resp && resp.status === 200 && resp.data && typeof resp.data === 'object') {
           usedUrl = u;
           break;
-        } else {
-          console.warn('Endpoint', u, 'returned', resp && resp.status);
         }
       } catch (e) {
         console.warn('Endpoint', u, 'failed:', e.message);
-        // try next
       }
     }
 
-    if (resp && resp.data) {
-      const data = resp.data;
-      console.log('Fetched ProtonDB data from', usedUrl || 'unknown');
+    if (!resp || !resp.data) {
+      console.error('Failed to fetch ProtonDB data from any endpoint');
+      process.exit(1);
+    }
 
-      const now = new Date().toISOString();
-      let count = 0;
+    const data = resp.data;
+    console.log('Fetched ProtonDB data from', usedUrl);
 
-      const selectStmt = db.prepare('SELECT id FROM proton_compatibility WHERE game_id = ?');
-      const insertStmt = db.prepare('INSERT INTO proton_compatibility(game_id, protondb_rating, total_reports, last_synced) VALUES (?, ?, ?, ?)');
-      const updateStmt = db.prepare('UPDATE proton_compatibility SET protondb_rating = ?, total_reports = ?, last_synced = ? WHERE game_id = ?');
+    const entries = Object.entries(data);
+    const totalEntries = limit ? Math.min(entries.length, limit) : entries.length;
+    console.log(`Processing ${totalEntries} ProtonDB entries...`);
 
-      // Ensure games rows exist for steam app ids and use the games.id as the foreign key
-      const selectGameBySteamId = db.prepare('SELECT id FROM games WHERE steam_id = ?');
-      const insertGameBySteamId = db.prepare('INSERT INTO games(steam_id, name, data_source, created_at) VALUES (?, ?, ?, ?)');
+    const now = new Date().toISOString();
+    let processed = 0;
+    let gamesCreated = 0;
+    let protonUpdated = 0;
 
-      for (const [appId, report] of Object.entries(data)) {
-        const rating = report.tier || report.rating || 'unknown';
-        const total = report.total || report.total_reports || 0;
+    // Process in batches
+    const gamesToUpsert = [];
+    const protonToUpsert = [];
 
-        // ensure games row exists and get its PK id
-        let gameRow = selectGameBySteamId.get(appId);
-        if (!gameRow) {
-          const gameName = report.title || report.name || `App ${appId}`;
-          insertGameBySteamId.run(appId, gameName, 'protondb-summaries', now);
-          gameRow = selectGameBySteamId.get(appId);
-        }
-        const gameForeignId = gameRow.id;
+    for (const [appId, report] of entries) {
+      if (limit && processed >= limit) break;
 
-        const existing = selectStmt.get(gameForeignId);
-        if (existing) {
-          updateStmt.run(rating, total, now, gameForeignId);
+      const steamId = parseInt(appId, 10);
+      if (isNaN(steamId)) continue;
+
+      const rating = report.tier || report.rating || 'unknown';
+      const total = report.total || report.total_reports || 0;
+      const gameName = report.title || report.name || `App ${appId}`;
+      const confidence = report.confidence || null;
+      const trendingTier = report.trendingTier || null;
+
+      // Queue game upsert
+      gamesToUpsert.push({
+        steam_id: steamId,
+        name: gameName,
+        data_source: 'protondb-summaries',
+        updated_at: now
+      });
+
+      processed++;
+
+      // Batch upsert games
+      if (gamesToUpsert.length >= UPSERT_BATCH_SIZE) {
+        const { error } = await supabase
+          .from('games')
+          .upsert(gamesToUpsert, { onConflict: 'steam_id', ignoreDuplicates: false });
+
+        if (error) {
+          console.error('Games upsert error:', error.message);
         } else {
-          insertStmt.run(gameForeignId, rating, total, now);
+          gamesCreated += gamesToUpsert.length;
         }
-        count++;
+        gamesToUpsert.length = 0;
+
+        // Progress
+        console.log(`  Progress: ${processed}/${totalEntries}`);
       }
-
-      console.log(`Synced ${count} ProtonDB entries`);
-    } else {
-      // Fallback: scrape explore and per-app pages to collect ratings
-      console.log('Falling back to HTML scraping of ProtonDB explore/app pages');
-      const exploreUrl = 'https://www.protondb.com/explore';
-      const exploreResp = await axios.get(exploreUrl, { timeout: 20000 });
-      let html = exploreResp.data;
-
-      // extract /app/<id> occurrences
-      const ids = new Set();
-      const re = /\/app\/(\d+)/g;
-      let m;
-      while ((m = re.exec(html)) !== null) {
-        ids.add(m[1]);
-      }
-
-      if (ids.size === 0) {
-        // try homepage as it sometimes contains static links
-        try {
-          const homeResp = await axios.get('https://www.protondb.com/', { timeout: 20000 });
-          html = homeResp.data;
-          while ((m = re.exec(html)) !== null) {
-            ids.add(m[1]);
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      const idList = Array.from(ids).slice(0, 500); // limit
-      const selectStmt = db.prepare('SELECT id FROM proton_compatibility WHERE game_id = ?');
-      const insertStmt = db.prepare('INSERT INTO proton_compatibility(game_id, protondb_rating, total_reports, last_synced) VALUES (?, ?, ?, ?)');
-      const updateStmt = db.prepare('UPDATE proton_compatibility SET protondb_rating = ?, total_reports = ?, last_synced = ? WHERE game_id = ?');
-
-      let synced = 0;
-      for (const appId of idList) {
-        try {
-          const appUrl = `https://www.protondb.com/app/${appId}`;
-          const aresp = await axios.get(appUrl, { timeout: 15000 });
-          const page = aresp.data.toLowerCase();
-
-          let rating = 'unknown';
-          if (page.includes('verified')) rating = 'verified';
-          else if (page.includes('native')) rating = 'native';
-          else if (page.includes('playable')) rating = 'playable';
-          else if (page.includes('unsupported')) rating = 'unsupported';
-          else if (page.includes('chromebook')) rating = 'chromebook';
-
-          const now = new Date().toISOString();
-
-          // ensure games row exists for this steam id
-          const selectGameBySteamId = db.prepare('SELECT id FROM games WHERE steam_id = ?');
-          const insertGameBySteamId = db.prepare('INSERT INTO games(steam_id, name, data_source, created_at) VALUES (?, ?, ?, ?)');
-          let gameRow = selectGameBySteamId.get(appId);
-          if (!gameRow) {
-            insertGameBySteamId.run(appId, `App ${appId}`, 'protondb-scraper', now);
-            gameRow = selectGameBySteamId.get(appId);
-          }
-          const gameForeignId = gameRow.id;
-
-          const existing = selectStmt.get(gameForeignId);
-          if (existing) updateStmt.run(rating, 0, now, gameForeignId);
-          else insertStmt.run(gameForeignId, rating, 0, now);
-          synced++;
-        } catch (e) {
-          // skip
-        }
-      }
-      console.log(`Scraped and synced ${synced} ProtonDB app ratings via HTML fallback`);
     }
+
+    // Final games upsert
+    if (gamesToUpsert.length > 0) {
+      const { error } = await supabase
+        .from('games')
+        .upsert(gamesToUpsert, { onConflict: 'steam_id', ignoreDuplicates: false });
+
+      if (error) {
+        console.error('Games upsert error:', error.message);
+      } else {
+        gamesCreated += gamesToUpsert.length;
+      }
+    }
+
+    console.log(`\nGames processed: ${gamesCreated}`);
+    console.log('Now updating proton_compatibility...');
+
+    // Now fetch all games to get their IDs for proton_compatibility
+    // Process in chunks to avoid memory issues
+    processed = 0;
+
+    for (const [appId, report] of entries) {
+      if (limit && processed >= limit) break;
+
+      const steamId = parseInt(appId, 10);
+      if (isNaN(steamId)) continue;
+
+      const rating = report.tier || report.rating || 'unknown';
+      const total = report.total || report.total_reports || 0;
+      const confidence = report.confidence || null;
+      const trendingTier = report.trendingTier || null;
+
+      // Get game ID
+      const { data: gameData } = await supabase
+        .from('games')
+        .select('id')
+        .eq('steam_id', steamId)
+        .single();
+
+      if (gameData) {
+        protonToUpsert.push({
+          game_id: gameData.id,
+          steam_id: steamId,
+          protondb_rating: rating,
+          total_reports: total,
+          confidence: confidence,
+          trending_tier: trendingTier,
+          last_synced: now
+        });
+      }
+
+      processed++;
+
+      // Batch upsert proton data
+      if (protonToUpsert.length >= UPSERT_BATCH_SIZE) {
+        const { error } = await supabase
+          .from('proton_compatibility')
+          .upsert(protonToUpsert, { onConflict: 'game_id' });
+
+        if (error) {
+          console.error('Proton upsert error:', error.message);
+        } else {
+          protonUpdated += protonToUpsert.length;
+        }
+        protonToUpsert.length = 0;
+
+        console.log(`  Proton progress: ${processed}/${totalEntries}`);
+      }
+    }
+
+    // Final proton upsert
+    if (protonToUpsert.length > 0) {
+      const { error } = await supabase
+        .from('proton_compatibility')
+        .upsert(protonToUpsert, { onConflict: 'game_id' });
+
+      if (error) {
+        console.error('Proton upsert error:', error.message);
+      } else {
+        protonUpdated += protonToUpsert.length;
+      }
+    }
+
+    // Update metadata
+    await supabase
+      .from('metadata')
+      .upsert({ key: 'last_protondb_sync', value: now }, { onConflict: 'key' });
+
+    console.log('\n--- ProtonDB Sync Complete ---');
+    console.log(`Total entries: ${totalEntries}`);
+    console.log(`Games created/updated: ${gamesCreated}`);
+    console.log(`Proton entries updated: ${protonUpdated}`);
+
   } catch (err) {
     console.error('Failed to sync ProtonDB:', err.message);
     process.exit(2);
-  } finally {
-    db.close();
   }
 }
 

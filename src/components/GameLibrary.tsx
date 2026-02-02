@@ -3,6 +3,7 @@ import { invokeTauri } from '../api/tauri';
 import { HardwareProfile } from '../api/hardware';
 import { UnifiedVerdictDashboard } from './UnifiedVerdictDashboard';
 import { detectSteamLibrary, SteamLibraryResult } from '../api/steam';
+import { browseGames as supabaseBrowseGames, SupabaseGameResult, BrowseOptions } from '../api/supabase';
 
 interface GameResult {
   steam_id: number;
@@ -96,12 +97,26 @@ export function GameLibrary({ hardwareProfile }: GameLibraryProps) {
     setError(null);
 
     try {
-      const results: GameResult[] = await invokeTauri('browse_games', {
-        filter_verdict: null,
-        filter_genre: null,
+      // Fetch game data from Supabase (cloud database)
+      const supabaseOptions: BrowseOptions = {
         limit: 500,
         offset: 0,
-      });
+      };
+      const supabaseResults: SupabaseGameResult[] = await supabaseBrowseGames(supabaseOptions);
+
+      // Map to GameResult format (add verdict: null, to be populated later)
+      const results: GameResult[] = supabaseResults.map(game => ({
+        steam_id: game.steam_id,
+        name: game.name,
+        genre: game.genre,
+        release_year: game.release_year,
+        header_image: game.header_image,
+        protondb_rating: game.protondb_rating,
+        deck_status: game.deck_status,
+        anti_cheat_type: game.anti_cheat_type,
+        anti_cheat_status: game.anti_cheat_status,
+        verdict: null,
+      }));
 
       // Check compatibility for each game if hardware is available
       // Process in batches to avoid overwhelming the backend

@@ -1,23 +1,28 @@
+#!/usr/bin/env node
 /**
- * Anti-Cheat Status Sync Script
+ * Anti-Cheat Status Sync Script (Supabase version)
  *
  * Fetches game anti-cheat status from areweanticheatyet.com
- * and stores it in the local database for verdict integration.
+ * and stores it in Supabase for verdict integration.
  *
  * Usage:
  *   npm run sync:anticheat
- *   node scripts/sync/anticheat.js --limit=100
+ *   npm run sync:anticheat -- --limit=100
+ *   npm run sync:anticheat -- --verbose
  */
 
 const axios = require('axios');
-const Database = require('better-sqlite3');
+const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
+
+// Load environment variables
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env.local') });
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 // AreWeAntiCheatYet provides a JSON API
 const AWACY_API_URL = 'https://raw.githubusercontent.com/AreWeAntiCheatYet/AreWeAntiCheatYet/refs/heads/master/games.json';
 
-// Database path
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../src-tauri/intelligence.db');
+const UPSERT_BATCH_SIZE = 100;
 
 // Map AWACY status values to our schema
 const STATUS_MAP = {
@@ -44,7 +49,7 @@ const ANTICHEAT_MAP = {
   'Arbiter': 'Other',
   'XIGNCODE3': 'Other',
   'Treyarch Anti-Cheat': 'Other',
-  'VAC': 'Other', // Valve Anti-Cheat works on Linux
+  'VAC': 'Other',
   'Warden': 'Other',
 };
 
@@ -61,78 +66,59 @@ function normalizeStatus(status) {
 async function fetchAntiCheatData() {
   console.log('Fetching anti-cheat data from AreWeAntiCheatYet...');
 
-  try {
-    const response = await axios.get(AWACY_API_URL, {
-      timeout: 30000,
-      headers: {
-        'User-Agent': 'SpecPilot/1.0 (game-compatibility-checker)'
-      }
-    });
+  const response = await axios.get(AWACY_API_URL, {
+    timeout: 30000,
+    headers: {
+      'User-Agent': 'SpecPilot/1.0 (game-compatibility-checker)'
+    }
+  });
 
-    return response.data;
-  } catch (error) {
-    console.error('Failed to fetch AWACY data:', error.message);
-    throw error;
+  return response.data;
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  let limit = null;
+  let verbose = false;
+
+  for (const arg of args) {
+    if (arg.startsWith('--limit=')) {
+      limit = parseInt(arg.split('=')[1], 10);
+    } else if (arg === '--verbose' || arg === '-v') {
+      verbose = true;
+    }
   }
-}
 
-function initDatabase(db) {
-  // Create table if not exists
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS anti_cheat_status (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      steam_id INTEGER UNIQUE,
-      game_name TEXT,
-      anti_cheat_type TEXT,
-      linux_status TEXT,
-      notes TEXT,
-      source TEXT,
-      source_url TEXT,
-      last_updated DATETIME,
-      created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    );
+  // Initialize Supabase
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 
-    CREATE INDEX IF NOT EXISTS idx_anticheat_steam ON anti_cheat_status(steam_id);
-    CREATE INDEX IF NOT EXISTS idx_anticheat_type ON anti_cheat_status(anti_cheat_type);
-    CREATE INDEX IF NOT EXISTS idx_anticheat_status ON anti_cheat_status(linux_status);
-  `);
-}
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Error: Missing Supabase credentials');
+    console.log('Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env.local');
+    process.exit(1);
+  }
 
-async function syncAntiCheat(options = {}) {
-  const { limit, verbose } = options;
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false }
+  });
 
-  // Fetch data
-  const games = await fetchAntiCheatData();
-  console.log(`Fetched ${games.length} games from AWACY`);
+  console.log('Connected to Supabase:', supabaseUrl);
 
-  // Open database
-  const db = new Database(DB_PATH);
-  initDatabase(db);
+  try {
+    // Fetch data
+    const games = await fetchAntiCheatData();
+    console.log(`Fetched ${games.length} games from AWACY`);
 
-  // Prepare upsert statement
-  const upsert = db.prepare(`
-    INSERT INTO anti_cheat_status (
-      steam_id, game_name, anti_cheat_type, linux_status, notes, source, source_url, last_updated
-    ) VALUES (
-      @steam_id, @game_name, @anti_cheat_type, @linux_status, @notes, @source, @source_url, @last_updated
-    )
-    ON CONFLICT(steam_id) DO UPDATE SET
-      game_name = @game_name,
-      anti_cheat_type = @anti_cheat_type,
-      linux_status = @linux_status,
-      notes = @notes,
-      source = @source,
-      source_url = @source_url,
-      last_updated = @last_updated
-  `);
+    const now = new Date().toISOString();
+    let processed = 0;
+    let inserted = 0;
+    let skipped = 0;
 
-  let processed = 0;
-  let inserted = 0;
-  let skipped = 0;
+    const pendingUpserts = [];
 
-  const insertMany = db.transaction((items) => {
-    for (const game of items) {
-      // Skip games without Steam ID (we can't match them)
+    for (const game of games) {
+      // Skip games without Steam ID
       if (!game.storeIds?.steam) {
         skipped++;
         continue;
@@ -144,14 +130,14 @@ async function syncAntiCheat(options = {}) {
         continue;
       }
 
-      // Get the primary anti-cheat (first one listed)
+      // Get the primary anti-cheat
       const antiCheatList = game.anticheats || [];
       const primaryAntiCheat = antiCheatList[0] || 'Unknown';
 
       // Get Linux status
       const status = normalizeStatus(game.status);
 
-      // Build notes from updates array (sanitize undefined values)
+      // Build notes
       let notes = '';
       if (game.updates && Array.isArray(game.updates) && game.updates.length > 0) {
         notes = game.updates
@@ -163,7 +149,7 @@ async function syncAntiCheat(options = {}) {
         notes = notes ? `${notes}; ${game.notes}` : game.notes;
       }
 
-      // Sanitize source_url - handle undefined slug/name
+      // Source URL
       let sourceUrl = null;
       if (game.url && typeof game.url === 'string') {
         sourceUrl = game.url;
@@ -171,7 +157,7 @@ async function syncAntiCheat(options = {}) {
         sourceUrl = `https://areweanticheatyet.com/game/${encodeURIComponent(game.slug || game.name || 'unknown')}`;
       }
 
-      const record = {
+      pendingUpserts.push({
         steam_id: steamId,
         game_name: (game.name && typeof game.name === 'string') ? game.name : 'Unknown',
         anti_cheat_type: normalizeAntiCheat(primaryAntiCheat),
@@ -179,82 +165,88 @@ async function syncAntiCheat(options = {}) {
         notes: (notes && notes.length > 0) ? notes : null,
         source: 'areweanticheatyet',
         source_url: sourceUrl,
-        last_updated: new Date().toISOString()
-      };
+        last_updated: now
+      });
 
-      try {
-        upsert.run(record);
-        inserted++;
-
-        if (verbose) {
-          console.log(`  [${status.toUpperCase()}] ${game.name} (${primaryAntiCheat})`);
-        }
-      } catch (err) {
-        console.error(`Failed to insert ${game.name}:`, err.message);
+      if (verbose) {
+        console.log(`  [${status.toUpperCase()}] ${game.name} (${primaryAntiCheat})`);
       }
 
       processed++;
+      inserted++;
 
       if (limit && processed >= limit) {
         break;
       }
-    }
-  });
 
-  // Process in batches
-  const batchSize = 100;
-  for (let i = 0; i < games.length; i += batchSize) {
-    const batch = games.slice(i, i + batchSize);
-    insertMany(batch);
+      // Batch upsert
+      if (pendingUpserts.length >= UPSERT_BATCH_SIZE) {
+        const { error } = await supabase
+          .from('anti_cheat_status')
+          .upsert(pendingUpserts, { onConflict: 'steam_id' });
 
-    if (limit && processed >= limit) {
-      break;
+        if (error) {
+          console.error('Upsert error:', error.message);
+        }
+        pendingUpserts.length = 0;
+
+        console.log(`  Progress: ${processed} processed`);
+      }
     }
+
+    // Final upsert
+    if (pendingUpserts.length > 0) {
+      const { error } = await supabase
+        .from('anti_cheat_status')
+        .upsert(pendingUpserts, { onConflict: 'steam_id' });
+
+      if (error) {
+        console.error('Final upsert error:', error.message);
+      }
+    }
+
+    // Update metadata
+    await supabase
+      .from('metadata')
+      .upsert({ key: 'last_anticheat_sync', value: now }, { onConflict: 'key' });
+
+    console.log('\n--- Anti-Cheat Sync Complete ---');
+    console.log(`Total games from AWACY: ${games.length}`);
+    console.log(`Processed: ${processed}`);
+    console.log(`Inserted/Updated: ${inserted}`);
+    console.log(`Skipped (no Steam ID): ${skipped}`);
+
+    // Summary stats
+    const { data: stats } = await supabase
+      .from('anti_cheat_status')
+      .select('linux_status, anti_cheat_type');
+
+    if (stats) {
+      const statusCounts = stats.reduce((acc, row) => {
+        acc[row.linux_status] = (acc[row.linux_status] || 0) + 1;
+        return acc;
+      }, {});
+
+      const typeCounts = stats.reduce((acc, row) => {
+        acc[row.anti_cheat_type] = (acc[row.anti_cheat_type] || 0) + 1;
+        return acc;
+      }, {});
+
+      console.log('\nBy Linux Status:');
+      for (const [status, count] of Object.entries(statusCounts).sort((a, b) => b[1] - a[1])) {
+        console.log(`  ${status}: ${count}`);
+      }
+
+      console.log('\nBy Anti-Cheat Type:');
+      for (const [type, count] of Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+        console.log(`  ${type}: ${count}`);
+      }
+    }
+
+  } catch (err) {
+    console.error('Sync failed:', err.message);
+    process.exit(1);
   }
-
-  db.close();
-
-  console.log('\n--- Sync Summary ---');
-  console.log(`Total games from AWACY: ${games.length}`);
-  console.log(`Processed: ${processed}`);
-  console.log(`Inserted/Updated: ${inserted}`);
-  console.log(`Skipped (no Steam ID): ${skipped}`);
-
-  return { processed, inserted, skipped };
 }
 
-// Parse command line arguments
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const options = {
-    limit: null,
-    verbose: false
-  };
-
-  for (const arg of args) {
-    if (arg.startsWith('--limit=')) {
-      options.limit = parseInt(arg.split('=')[1], 10);
-    } else if (arg === '--verbose' || arg === '-v') {
-      options.verbose = true;
-    }
-  }
-
-  return options;
-}
-
-// Main execution
-if (require.main === module) {
-  const options = parseArgs();
-
-  syncAntiCheat(options)
-    .then((result) => {
-      console.log('\nSync completed successfully!');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('\nSync failed:', error.message);
-      process.exit(1);
-    });
-}
-
-module.exports = { syncAntiCheat, fetchAntiCheatData };
+main();

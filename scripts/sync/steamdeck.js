@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Steam Deck Compatibility Sync
+ * Steam Deck Compatibility Sync (Supabase version)
  *
  * Fetches Steam Deck verified/playable status from Steam's API
- * and stores it in the steamdeck_compatibility table.
+ * and stores it in Supabase steamdeck_compatibility table.
  *
  * Usage:
  *   npm run sync:steamdeck                    # Sync all games in DB
@@ -14,15 +14,18 @@
  */
 
 const axios = require('axios');
-const Database = require('better-sqlite3');
+const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 
-const dbPath = path.join(__dirname, '..', '..', 'src-tauri', 'intelligence.db');
+// Load environment variables
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env.local') });
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 // Rate limiting: Steam API allows ~200 requests per 5 minutes
 const RATE_LIMIT_DELAY_MS = 1500; // 1.5 seconds between requests
 const BATCH_SIZE = 50;
 const BATCH_DELAY_MS = 5000; // 5 second pause between batches
+const UPSERT_BATCH_SIZE = 100; // Rows per Supabase upsert
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -81,8 +84,6 @@ async function fetchDeckStatus(appId, retryCount = 0) {
     if (results.resolved_items && Array.isArray(results.resolved_items)) {
       const notesList = results.resolved_items
         .map(item => {
-          // Convert loc_token to readable text
-          // e.g. "#SteamDeckVerified_TestResult_DefaultControllerConfigFullyFunctional"
           const token = item.loc_token || '';
           return token
             .replace('#SteamDeckVerified_TestResult_', '')
@@ -128,29 +129,6 @@ async function fetchDeckStatus(appId, retryCount = 0) {
   }
 }
 
-/**
- * Alternative: Fetch from ProtonDB's Steam Deck reports
- * ProtonDB includes Steam Deck specific reports
- */
-async function fetchProtonDBDeckReports(appId) {
-  try {
-    const url = `https://www.protondb.com/api/v1/reports/summaries/${appId}.json`;
-    const resp = await axios.get(url, { timeout: 10000 });
-
-    if (resp.data && resp.data.steamDeck) {
-      const deckData = resp.data.steamDeck;
-      return {
-        status: deckData.tier || 'unknown',
-        tested: deckData.total > 0,
-        notes: `${deckData.total} user reports`
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 async function main() {
   const args = process.argv.slice(2);
   let limit = null;
@@ -167,100 +145,97 @@ async function main() {
     }
   }
 
-  let db;
-  try {
-    db = new Database(dbPath);
-  } catch (err) {
-    console.error('Failed to open database:', err.message);
-    console.log('Run "npm run intelligence:init" first to create the database.');
+  // Initialize Supabase client
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Error: Missing Supabase credentials');
+    console.log('Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env.local');
     process.exit(1);
   }
 
-  try {
-    // Ensure steamdeck_compatibility table exists
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS steamdeck_compatibility (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        steam_id INTEGER UNIQUE,
-        deck_status TEXT,
-        deck_tested INTEGER DEFAULT 0,
-        recommended_settings TEXT,
-        notes TEXT,
-        last_synced DATETIME,
-        FOREIGN KEY(steam_id) REFERENCES games(steam_id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_steamdeck_game ON steamdeck_compatibility(steam_id);
-      CREATE INDEX IF NOT EXISTS idx_steamdeck_status ON steamdeck_compatibility(deck_status);
-    `);
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false }
+  });
 
-    // Get games to sync
-    let games;
+  console.log('Connected to Supabase:', supabaseUrl);
+
+  try {
+    // Get games to sync from Supabase
+    let games = [];
+
     if (specificAppId) {
-      games = db.prepare('SELECT id, steam_id, name FROM games WHERE steam_id = ?').all(specificAppId);
+      const { data, error } = await supabase
+        .from('games')
+        .select('id, steam_id, name')
+        .eq('steam_id', specificAppId);
+
+      if (error) throw error;
+      games = data || [];
     } else if (popularOnly) {
-      // Only sync games that have actual ProtonDB reports (not 'unknown')
-      let query = `
-        SELECT g.id, g.steam_id, g.name
-        FROM games g
-        JOIN proton_compatibility p ON g.id = p.game_id
-        WHERE g.steam_id IS NOT NULL
-          AND p.protondb_rating != 'unknown'
-        ORDER BY p.total_reports DESC
-      `;
-      if (limit) {
-        query += ` LIMIT ${limit}`;
-      }
-      games = db.prepare(query).all();
+      // Get games with ProtonDB reports (not 'unknown'), ordered by report count
+      // Join through game_id since proton_compatibility.steam_id may be null
+      const { data, error } = await supabase
+        .from('proton_compatibility')
+        .select('game_id, protondb_rating, total_reports, games!inner(id, steam_id, name)')
+        .neq('protondb_rating', 'unknown')
+        .order('total_reports', { ascending: false })
+        .limit(limit || 30000);
+
+      if (error) throw error;
+
+      // Flatten the result, filtering out games without steam_id
+      games = (data || [])
+        .filter(row => row.games && row.games.steam_id)
+        .map(row => ({
+          id: row.games.id,
+          steam_id: row.games.steam_id,
+          name: row.games.name
+        }));
+
       console.log(`Syncing popular games only (with ProtonDB reports)...`);
     } else {
-      let query = 'SELECT id, steam_id, name FROM games WHERE steam_id IS NOT NULL';
+      let query = supabase
+        .from('games')
+        .select('id, steam_id, name')
+        .not('steam_id', 'is', null);
+
       if (limit) {
-        query += ` LIMIT ${limit}`;
+        query = query.limit(limit);
       }
-      games = db.prepare(query).all();
+
+      const { data, error } = await query;
+      if (error) throw error;
+      games = data || [];
     }
 
     if (games.length === 0) {
-      console.log('No games found to sync. Add games first with ProtonDB sync or game import.');
+      console.log('No games found to sync.');
       return;
     }
 
     console.log(`Syncing Steam Deck compatibility for ${games.length} games...`);
 
-    const upsertStmt = db.prepare(`
-      INSERT INTO steamdeck_compatibility (steam_id, deck_status, deck_tested, notes, last_synced)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(steam_id) DO UPDATE SET
-        deck_status = excluded.deck_status,
-        deck_tested = excluded.deck_tested,
-        notes = excluded.notes,
-        last_synced = excluded.last_synced
-    `);
-
     let synced = 0;
     let failed = 0;
     let batched = 0;
+    const pendingUpserts = [];
 
     for (let i = 0; i < games.length; i++) {
       const game = games[i];
 
-      // Try Steam API first
-      let deckInfo = await fetchDeckStatus(game.steam_id);
-
-      // Fallback to ProtonDB Steam Deck reports
-      if (!deckInfo) {
-        deckInfo = await fetchProtonDBDeckReports(game.steam_id);
-      }
+      // Try Steam API
+      const deckInfo = await fetchDeckStatus(game.steam_id);
 
       if (deckInfo) {
-        const now = new Date().toISOString();
-        upsertStmt.run(
-          game.steam_id,
-          deckInfo.status,
-          deckInfo.tested ? 1 : 0,
-          deckInfo.notes || null,
-          now
-        );
+        pendingUpserts.push({
+          steam_id: game.steam_id,
+          deck_status: deckInfo.status,
+          deck_tested: deckInfo.tested,
+          notes: deckInfo.notes || null,
+          last_synced: new Date().toISOString()
+        });
         synced++;
 
         const statusEmoji = {
@@ -272,6 +247,18 @@ async function main() {
         console.log(`  ${statusEmoji[deckInfo.status] || '❓'} ${game.name || game.steam_id}: ${deckInfo.status}`);
       } else {
         failed++;
+      }
+
+      // Batch upsert to Supabase
+      if (pendingUpserts.length >= UPSERT_BATCH_SIZE) {
+        const { error } = await supabase
+          .from('steamdeck_compatibility')
+          .upsert(pendingUpserts, { onConflict: 'steam_id' });
+
+        if (error) {
+          console.error('  Upsert error:', error.message);
+        }
+        pendingUpserts.length = 0;
       }
 
       // Rate limiting
@@ -290,34 +277,54 @@ async function main() {
       }
     }
 
+    // Final upsert for remaining records
+    if (pendingUpserts.length > 0) {
+      const { error } = await supabase
+        .from('steamdeck_compatibility')
+        .upsert(pendingUpserts, { onConflict: 'steam_id' });
+
+      if (error) {
+        console.error('  Final upsert error:', error.message);
+      }
+    }
+
     console.log('\n--- Steam Deck Sync Complete ---');
     console.log(`Total games: ${games.length}`);
     console.log(`Successfully synced: ${synced}`);
     console.log(`Failed/unavailable: ${failed}`);
 
-    // Summary stats
-    const stats = db.prepare(`
-      SELECT deck_status, COUNT(*) as count
-      FROM steamdeck_compatibility
-      GROUP BY deck_status
-    `).all();
+    // Summary stats from Supabase
+    const { data: stats, error: statsError } = await supabase
+      .from('steamdeck_compatibility')
+      .select('deck_status')
+      .not('deck_status', 'is', null);
 
-    console.log('\nDeck Compatibility Breakdown:');
-    for (const stat of stats) {
+    if (!statsError && stats) {
+      const counts = stats.reduce((acc, row) => {
+        acc[row.deck_status] = (acc[row.deck_status] || 0) + 1;
+        return acc;
+      }, {});
+
+      console.log('\nDeck Compatibility Breakdown:');
       const emoji = {
         'verified': '✅',
         'playable': '🟡',
         'unsupported': '❌',
         'unknown': '❓'
       };
-      console.log(`  ${emoji[stat.deck_status] || '❓'} ${stat.deck_status}: ${stat.count}`);
+      for (const [status, count] of Object.entries(counts)) {
+        console.log(`  ${emoji[status] || '❓'} ${status}: ${count}`);
+      }
     }
+
+    // Update metadata
+    await supabase
+      .from('metadata')
+      .upsert({ key: 'last_steamdeck_sync', value: new Date().toISOString() }, { onConflict: 'key' });
 
   } catch (err) {
     console.error('Sync failed:', err.message);
     process.exit(1);
-  } finally {
-    db.close();
   }
 }
 

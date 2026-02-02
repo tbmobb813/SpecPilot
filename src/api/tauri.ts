@@ -1,8 +1,8 @@
 /**
- * Check if running inside Tauri WebView
+ * Check if running inside Tauri WebView (v1)
  */
 function isTauriEnvironment(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  return typeof window !== 'undefined' && '__TAURI__' in window;
 }
 
 /**
@@ -16,14 +16,14 @@ export async function invokeTauri<T = any>(cmd: string, args?: any): Promise<T> 
   }
 
   try {
-    const mod = await import('@tauri-apps/api/core');
-    const inv = (mod as any).invoke;
-    if (typeof inv !== 'function') {
+    // Tauri v1 uses @tauri-apps/api/tauri
+    const { invoke } = await import('@tauri-apps/api/tauri');
+    if (typeof invoke !== 'function') {
       return Promise.reject(new Error('Tauri invoke not available'));
     }
 
     try {
-      return await inv(cmd, args);
+      return await invoke(cmd, args);
     } catch (e) {
       return Promise.reject(e instanceof Error ? e : new Error(String(e)));
     }
